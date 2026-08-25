@@ -34,6 +34,8 @@ func New(backend backend.Backend, options *Options) *Worker {
 
 	if options == nil {
 		options = &DefaultOptions
+	} else {
+		applyDefaults(options)
 	}
 
 	var interceptors []interceptor.Interceptor
@@ -158,4 +160,38 @@ func (w *Worker) RegisterWorkflow(wf workflow.Workflow, opts ...registry.Registe
 // RegisterActivity registers an activity with the worker's registry.
 func (w *Worker) RegisterActivity(a workflow.Activity, opts ...registry.RegisterOption) error {
 	return w.registry.RegisterActivity(a, opts...)
+}
+
+// applyDefaults fills zero-value fields in options with values from DefaultOptions.
+// This allows users to only specify the fields they care about without losing defaults.
+func applyDefaults(o *Options) {
+	d := &DefaultOptions
+
+	// Workflow worker defaults
+	if o.WorkflowPollers == 0 {
+		o.WorkflowPollers = d.WorkflowPollers
+	}
+	if o.WorkflowPollingInterval == 0 {
+		o.WorkflowPollingInterval = d.WorkflowPollingInterval
+	}
+	if o.WorkflowHeartbeatInterval == 0 {
+		o.WorkflowHeartbeatInterval = d.WorkflowHeartbeatInterval
+	}
+	if o.WorkflowExecutorCacheSize == 0 {
+		o.WorkflowExecutorCacheSize = d.WorkflowExecutorCacheSize
+	}
+	if o.WorkflowExecutorCacheTTL == 0 {
+		o.WorkflowExecutorCacheTTL = d.WorkflowExecutorCacheTTL
+	}
+
+	// Activity worker defaults
+	if o.ActivityPollers == 0 {
+		o.ActivityPollers = d.ActivityPollers
+	}
+	if o.ActivityPollingInterval == 0 {
+		o.ActivityPollingInterval = d.ActivityPollingInterval
+	}
+	if o.ActivityHeartbeatInterval == 0 {
+		o.ActivityHeartbeatInterval = d.ActivityHeartbeatInterval
+	}
 }

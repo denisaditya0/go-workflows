@@ -55,16 +55,16 @@ func runWorkflow(ctx context.Context, c *client.Client) {
 
 func RunWorker(ctx context.Context, mb backend.Backend) *worker.Worker {
 	// Create worker with global interceptors
-	opts := worker.DefaultOptions
-	opts.Interceptors = []interceptor.Interceptor{
-		// Global: applies to ALL workflows and activities
-		&interceptor.LoggingInterceptor{},
+	// Zero-value fields automatically use defaults (pollers, intervals, etc.)
+	w := worker.New(mb, &worker.Options{
+		Interceptors: []interceptor.Interceptor{
+			// Global: applies to ALL workflows and activities
+			&interceptor.LoggingInterceptor{},
 
-		// Custom: duration tracking for all executions
-		&DurationInterceptor{},
-	}
-
-	w := worker.New(mb, &opts)
+			// Custom: duration tracking for all executions
+			&DurationInterceptor{},
+		},
+	})
 
 	w.RegisterWorkflow(OrderWorkflow)
 
