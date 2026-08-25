@@ -17,6 +17,7 @@ import (
 	"github.com/cschleiden/go-workflows/backend/metadata"
 	"github.com/cschleiden/go-workflows/backend/payload"
 	"github.com/cschleiden/go-workflows/core"
+	"github.com/cschleiden/go-workflows/interceptor"
 	"github.com/cschleiden/go-workflows/internal/command"
 	"github.com/cschleiden/go-workflows/internal/contextvalue"
 	"github.com/cschleiden/go-workflows/internal/continueasnew"
@@ -75,6 +76,8 @@ type executor struct {
 	workflowSpan trace.Span
 
 	maxHistorySize int64
+
+	interceptors []interceptor.WorkflowInterceptor
 }
 
 func NewExecutor(
@@ -88,6 +91,7 @@ func NewExecutor(
 	metadata *metadata.WorkflowMetadata,
 	clock clock.Clock,
 	maxHistorySize int64,
+	interceptors []interceptor.Interceptor,
 ) (WorkflowExecutor, error) {
 	s := workflowstate.NewWorkflowState(instance, logger, tracer, clock)
 
@@ -109,6 +113,12 @@ func NewExecutor(
 		}
 	}
 
+	// Extract workflow interceptors from the combined interceptor list
+	var wfInterceptors []interceptor.WorkflowInterceptor
+	for _, i := range interceptors {
+		wfInterceptors = append(wfInterceptors, i)
+	}
+
 	return &executor{
 		registry:          r,
 		historyProvider:   historyProvider,
@@ -120,6 +130,7 @@ func NewExecutor(
 		maxHistorySize:    maxHistorySize,
 		logger:            logger,
 		tracer:            tracer,
+		interceptors:      wfInterceptors,
 	}, nil
 }
 
@@ -438,8 +449,21 @@ func (e *executor) handleWorkflowExecutionStarted(event *history.Event, a *histo
 	// Update logger with trace context so workflow.Logger includes trace_id and span_id
 	e.workflowState.UpdateLoggerWithSpan(span.SpanContext())
 
-	e.workflow = newWorkflow(reflect.ValueOf(wfFn))
-	return e.workflow.Execute(e.workflowCtx, a.Inputs)
+	info := &interceptor.WorkflowInfo{
+		Name:     a.Name,
+		Instance: e.workflowState.Instance(),
+	}
+
+	// Combine global interceptors with per-workflow interceptors
+	allInterceptors := e.interceptors
+	if perWf := e.registry.GetWorkflowInterceptors(a.Name); len(perWf) > 0 {
+		allInterceptors = make([]interceptor.WorkflowInterceptor, 0, len(e.interceptors)+len(perWf))
+		allInterceptors = append(allInterceptors, e.interceptors...)
+		allInterceptors = append(allInterceptors, perWf...)
+	}
+
+	e.workflow = newWorkflow(reflect.ValueOf(wfFn), allInterceptors)
+	return e.workflow.Execute(e.workflowCtx, a.Inputs, info)
 }
 
 func (e *executor) handleWorkflowCanceled() error {

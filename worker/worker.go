@@ -7,6 +7,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/cschleiden/go-workflows/backend"
 	"github.com/cschleiden/go-workflows/client"
+	"github.com/cschleiden/go-workflows/interceptor"
 	"github.com/cschleiden/go-workflows/internal/signals"
 	internal "github.com/cschleiden/go-workflows/internal/worker"
 	"github.com/cschleiden/go-workflows/internal/workflows"
@@ -35,8 +36,13 @@ func New(backend backend.Backend, options *Options) *Worker {
 		options = &DefaultOptions
 	}
 
-	workflowWorker := newWorkflowWorker(backend, registry, &options.WorkflowWorkerOptions)
-	activityWorker := newActivityWorker(backend, registry, &options.ActivityWorkerOptions)
+	var interceptors []interceptor.Interceptor
+	if options.Interceptors != nil {
+		interceptors = options.Interceptors
+	}
+
+	workflowWorker := newWorkflowWorker(backend, registry, &options.WorkflowWorkerOptions, interceptors)
+	activityWorker := newActivityWorker(backend, registry, &options.ActivityWorkerOptions, interceptors)
 
 	// Register internal activities
 	return newWorker(backend, registry, []worker{workflowWorker, activityWorker})
@@ -46,14 +52,14 @@ func New(backend backend.Backend, options *Options) *Worker {
 func NewWorkflowWorker(backend backend.Backend, options *WorkflowWorkerOptions) *Worker {
 	registry := registry.New()
 
-	return newWorker(backend, registry, []worker{newWorkflowWorker(backend, registry, options)})
+	return newWorker(backend, registry, []worker{newWorkflowWorker(backend, registry, options, nil)})
 }
 
 // NewActivityWorker creates a worker that only processes activities.
 func NewActivityWorker(backend backend.Backend, options *ActivityWorkerOptions) *Worker {
 	registry := registry.New()
 
-	return newWorker(backend, registry, []worker{newActivityWorker(backend, registry, options)})
+	return newWorker(backend, registry, []worker{newActivityWorker(backend, registry, options, nil)})
 }
 
 func newWorker(backend backend.Backend, registry *registry.Registry, workers []worker) *Worker {
@@ -78,7 +84,7 @@ func newWorker(backend backend.Backend, registry *registry.Registry, workers []w
 	}
 }
 
-func newActivityWorker(backend backend.Backend, registry *registry.Registry, options *ActivityWorkerOptions) worker {
+func newActivityWorker(backend backend.Backend, registry *registry.Registry, options *ActivityWorkerOptions, interceptors []interceptor.Interceptor) worker {
 	if options == nil {
 		options = &DefaultOptions.ActivityWorkerOptions
 	}
@@ -91,12 +97,12 @@ func newActivityWorker(backend backend.Backend, registry *registry.Registry, opt
 		MaxParallelTasks:   options.MaxParallelActivityTasks,
 		HeartbeatInterval:  options.ActivityHeartbeatInterval,
 		Queues:             options.ActivityQueues,
-	})
+	}, interceptors)
 
 	return activityWorker
 }
 
-func newWorkflowWorker(backend backend.Backend, registry *registry.Registry, options *WorkflowWorkerOptions) worker {
+func newWorkflowWorker(backend backend.Backend, registry *registry.Registry, options *WorkflowWorkerOptions, interceptors []interceptor.Interceptor) worker {
 	if options == nil {
 		options = &DefaultOptions.WorkflowWorkerOptions
 	}
@@ -114,7 +120,7 @@ func newWorkflowWorker(backend backend.Backend, registry *registry.Registry, opt
 		WorkflowExecutorCache:     options.WorkflowExecutorCache,
 		WorkflowExecutorCacheSize: options.WorkflowExecutorCacheSize,
 		WorkflowExecutorCacheTTL:  options.WorkflowExecutorCacheTTL,
-	})
+	}, interceptors)
 
 	return workflowWorker
 }
