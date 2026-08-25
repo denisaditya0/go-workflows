@@ -97,15 +97,17 @@ func (rb *redisBackend) GetWorkflowInstanceHistory(ctx context.Context, instance
 		events = append(events, event)
 	}
 
-	res, err := rb.rdb.HMGet(ctx, rb.keys.payloadKey(instance), payloadKeys...).Result()
-	if err != nil {
-		return nil, fmt.Errorf("reading payloads: %w", err)
-	}
-
-	for i, event := range events {
-		event.Attributes, err = history.DeserializeAttributes(event.Type, []byte(res[i].(string)))
+	if len(payloadKeys) > 0 {
+		res, err := rb.rdb.HMGet(ctx, rb.keys.payloadKey(instance), payloadKeys...).Result()
 		if err != nil {
-			return nil, fmt.Errorf("deserializing attributes for event %v: %w", event.Type, err)
+			return nil, fmt.Errorf("reading payloads: %w", err)
+		}
+
+		for i, event := range events {
+			event.Attributes, err = history.DeserializeAttributes(event.Type, []byte(res[i].(string)))
+			if err != nil {
+				return nil, fmt.Errorf("deserializing attributes for event %v: %w", event.Type, err)
+			}
 		}
 	}
 

@@ -240,6 +240,17 @@ func BackendTest(t *testing.T, setup func(options ...backend.BackendOption) Test
 			},
 		},
 		{
+			name: "GetWorkflowInstanceHistory_ReturnsEmptyHistory",
+			f: func(t *testing.T, ctx context.Context, b backend.Backend) {
+				instance := core.NewWorkflowInstance(uuid.NewString(), uuid.NewString())
+
+				events, err := b.GetWorkflowInstanceHistory(ctx, instance, nil)
+
+				require.NoError(t, err)
+				require.Empty(t, events)
+			},
+		},
+		{
 			name: "CompleteWorkflowTask_AddsNewEventsToHistory",
 			f: func(t *testing.T, ctx context.Context, b backend.Backend) {
 				startedEvent := history.NewHistoryEvent(1, time.Now(), history.EventType_WorkflowExecutionStarted, &history.ExecutionStartedAttributes{
