@@ -3,6 +3,7 @@ package worker
 import (
 	"time"
 
+	"github.com/cschleiden/go-workflows/interceptor"
 	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/cschleiden/go-workflows/workflow/executor"
 )
@@ -51,6 +52,10 @@ type WorkflowWorkerOptions struct {
 type Options struct {
 	WorkflowWorkerOptions
 	ActivityWorkerOptions
+
+	// Interceptors is a list of interceptors applied to all workflow and activity
+	// executions on this worker. Interceptors are called in order.
+	Interceptors []interceptor.Interceptor
 
 	// SingleWorkerMode enables optimizations for scenarios where only a single worker
 	// is processing tasks. This should only be enabled when you have exactly one worker

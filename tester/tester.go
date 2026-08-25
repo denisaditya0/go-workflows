@@ -18,6 +18,7 @@ import (
 	"github.com/cschleiden/go-workflows/backend/metadata"
 	"github.com/cschleiden/go-workflows/backend/payload"
 	"github.com/cschleiden/go-workflows/core"
+	"github.com/cschleiden/go-workflows/interceptor"
 	"github.com/cschleiden/go-workflows/internal/activity"
 	"github.com/cschleiden/go-workflows/internal/args"
 	"github.com/cschleiden/go-workflows/internal/command"
@@ -187,6 +188,8 @@ type workflowTester[TResult any] struct {
 	converter converter.Converter
 
 	propagators []workflow.ContextPropagator
+
+	interceptors []interceptor.Interceptor
 }
 
 func NewWorkflowTester[TResult any](workflow workflow.Workflow, opts ...WorkflowTesterOption) *workflowTester[TResult] {
@@ -243,10 +246,11 @@ func NewWorkflowTester[TResult any](workflow workflow.Workflow, opts ...Workflow
 		callbacks: make(chan func() *history.WorkflowEvent, 1024),
 		timerMode: TM_TimeTravel,
 
-		logger:      options.Logger.With("source", "tester"),
-		tracer:      tracer,
-		converter:   options.Converter,
-		propagators: options.Propagators,
+		logger:       options.Logger.With("source", "tester"),
+		tracer:       tracer,
+		converter:    options.Converter,
+		propagators:  options.Propagators,
+		interceptors: options.Interceptors,
 	}
 
 	// Register internal activities
@@ -372,6 +376,7 @@ func (wt *workflowTester[TResult]) Execute(ctx context.Context, args ...any) {
 					tw.metadata,
 					wt.clock,
 					wt.options.MaxHistorySize,
+					wt.interceptors,
 				)
 				if err != nil {
 					panic(fmt.Errorf("could not create workflow executor: %v", err))
@@ -723,7 +728,7 @@ func (wt *workflowTester[TResult]) scheduleActivity(wfi *core.WorkflowInstance, 
 				)
 			}
 		} else {
-			executor := activity.NewExecutor(wt.logger, wt.tracer, wt.converter, wt.propagators, wt.registry)
+			executor := activity.NewExecutor(wt.logger, wt.tracer, wt.converter, wt.propagators, wt.registry, wt.interceptors)
 			activityResult, activityErr = executor.ExecuteActivity(context.Background(), &backend.ActivityTask{
 				ID:               uuid.NewString(),
 				WorkflowInstance: wfi,

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/cschleiden/go-workflows/interceptor"
 	"github.com/cschleiden/go-workflows/internal/args"
 	"github.com/cschleiden/go-workflows/internal/fn"
 )
@@ -13,20 +14,27 @@ import (
 type Registry struct {
 	sync.Mutex
 
-	workflowMap map[string]any
-	activityMap map[string]any
+	workflowMap            map[string]any
+	workflowInterceptorMap map[string][]interceptor.WorkflowInterceptor
+
+	activityMap            map[string]any
+	activityInterceptorMap map[string][]interceptor.ActivityInterceptor
 }
 
 // New creates a new registry instance.
 func New() *Registry {
 	return &Registry{
-		workflowMap: make(map[string]any),
-		activityMap: make(map[string]any),
+		workflowMap:            make(map[string]any),
+		workflowInterceptorMap: make(map[string][]interceptor.WorkflowInterceptor),
+		activityMap:            make(map[string]any),
+		activityInterceptorMap: make(map[string][]interceptor.ActivityInterceptor),
 	}
 }
 
 type registerConfig struct {
-	Name string
+	Name                 string
+	WorkflowInterceptors []interceptor.WorkflowInterceptor
+	ActivityInterceptors  []interceptor.ActivityInterceptor
 }
 
 func (r *Registry) RegisterWorkflow(workflow any, opts ...RegisterOption) error {
@@ -71,6 +79,10 @@ func (r *Registry) RegisterWorkflow(workflow any, opts ...RegisterOption) error 
 	}
 	r.workflowMap[name] = workflow
 
+	if len(cfg.WorkflowInterceptors) > 0 {
+		r.workflowInterceptorMap[name] = cfg.WorkflowInterceptors
+	}
+
 	return nil
 }
 
@@ -101,6 +113,10 @@ func (r *Registry) RegisterActivity(activity any, opts ...RegisterOption) error 
 		return &ErrActivityAlreadyRegistered{fmt.Sprintf("activity with name %q already registered", name)}
 	}
 	r.activityMap[name] = activity
+
+	if len(cfg.ActivityInterceptors) > 0 {
+		r.activityInterceptorMap[name] = cfg.ActivityInterceptors
+	}
 
 	return nil
 }
@@ -170,4 +186,22 @@ func (r *Registry) GetActivity(name string) (interface{}, error) {
 	}
 
 	return nil, errors.New("activity not found")
+}
+
+// GetWorkflowInterceptors returns the per-workflow interceptors registered for the given workflow name.
+// Returns nil if no per-workflow interceptors were registered.
+func (r *Registry) GetWorkflowInterceptors(name string) []interceptor.WorkflowInterceptor {
+	r.Lock()
+	defer r.Unlock()
+
+	return r.workflowInterceptorMap[name]
+}
+
+// GetActivityInterceptors returns the per-activity interceptors registered for the given activity name.
+// Returns nil if no per-activity interceptors were registered.
+func (r *Registry) GetActivityInterceptors(name string) []interceptor.ActivityInterceptor {
+	r.Lock()
+	defer r.Unlock()
+
+	return r.activityInterceptorMap[name]
 }

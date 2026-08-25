@@ -39,8 +39,8 @@ func NewWorkflowOrchestrator(backend backend.Backend, options *Options) *Workflo
 	reg := registry.New()
 
 	// Create a regular worker with the registry
-	workflowWorker := newWorkflowWorker(backend, reg, &orchestratorOptions.WorkflowWorkerOptions)
-	activityWorker := newActivityWorker(backend, reg, &orchestratorOptions.ActivityWorkerOptions)
+	workflowWorker := newWorkflowWorker(backend, reg, &orchestratorOptions.WorkflowWorkerOptions, orchestratorOptions.Interceptors)
+	activityWorker := newActivityWorker(backend, reg, &orchestratorOptions.ActivityWorkerOptions, orchestratorOptions.Interceptors)
 	w := newWorker(backend, reg, []worker{workflowWorker, activityWorker})
 	c := client.New(backend)
 

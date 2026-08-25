@@ -11,6 +11,7 @@ import (
 	"github.com/cschleiden/go-workflows/backend/converter"
 	"github.com/cschleiden/go-workflows/backend/history"
 	"github.com/cschleiden/go-workflows/backend/payload"
+	"github.com/cschleiden/go-workflows/interceptor"
 	"github.com/cschleiden/go-workflows/internal/args"
 	"github.com/cschleiden/go-workflows/internal/log"
 	"github.com/cschleiden/go-workflows/internal/tracing"
@@ -22,11 +23,12 @@ import (
 )
 
 type Executor struct {
-	logger      *slog.Logger
-	tracer      trace.Tracer
-	converter   converter.Converter
-	propagators []wf.ContextPropagator
-	r           *registry.Registry
+	logger       *slog.Logger
+	tracer       trace.Tracer
+	converter    converter.Converter
+	propagators  []wf.ContextPropagator
+	r            *registry.Registry
+	interceptors []interceptor.ActivityInterceptor
 }
 
 func NewExecutor(
@@ -35,13 +37,21 @@ func NewExecutor(
 	converter converter.Converter,
 	propagators []wf.ContextPropagator,
 	r *registry.Registry,
+	interceptors []interceptor.Interceptor,
 ) *Executor {
+	// Extract activity interceptors from the combined interceptor list
+	var actInterceptors []interceptor.ActivityInterceptor
+	for _, i := range interceptors {
+		actInterceptors = append(actInterceptors, i)
+	}
+
 	return &Executor{
-		logger:      logger,
-		tracer:      tracer,
-		converter:   converter,
-		propagators: propagators,
-		r:           r,
+		logger:       logger,
+		tracer:       tracer,
+		converter:    converter,
+		propagators:  propagators,
+		r:            r,
+		interceptors: actInterceptors,
 	}
 }
 
@@ -92,53 +102,91 @@ func (e *Executor) ExecuteActivity(ctx context.Context, task *backend.ActivityTa
 		args[0] = reflect.ValueOf(activityCtx)
 	}
 
-	done := make(chan struct{})
-	var rv []reflect.Value
-
-	go func() {
-		// Recover any panic encountered during activity execution
-		defer func() {
-			if r := recover(); r != nil {
-				err := workflowerrors.NewPanicError(fmt.Sprintf("panic: %v", r))
-				rv = []reflect.Value{reflect.ValueOf(err)}
-			}
-
-			close(done)
-		}()
-
-		rv = activityFn.Call(args)
-	}()
-
-	<-done
-
-	if len(rv) < 1 || len(rv) > 2 {
-		return nil, workflowerrors.NewPermanentError(
-			tracing.WithSpanError(span, errors.New("activity has to return either (error) or (<result>, error)")))
+	info := &interceptor.ActivityInfo{
+		Name:    a.Name,
+		Attempt: a.Attempt,
 	}
 
 	var result payload.Payload
 
-	// Convert activity result to payload. We always expect at least an error
-	if len(rv) > 1 {
-		var err error
-		result, err = e.converter.To(rv[0].Interface())
-		if err != nil {
-			return nil, workflowerrors.NewPermanentError(tracing.WithSpanError(span, fmt.Errorf("converting activity result: %w", err)))
+	// Build the innermost handler that calls the actual activity function
+	inner := func(ctx context.Context) error {
+		// Update args[0] with the potentially-modified context from interceptors
+		if addContext {
+			args[0] = reflect.ValueOf(ctx)
+		}
+
+		done := make(chan struct{})
+		var rv []reflect.Value
+
+		go func() {
+			// Recover any panic encountered during activity execution
+			defer func() {
+				if r := recover(); r != nil {
+					err := workflowerrors.NewPanicError(fmt.Sprintf("panic: %v", r))
+					rv = []reflect.Value{reflect.ValueOf(err)}
+				}
+
+				close(done)
+			}()
+
+			rv = activityFn.Call(args)
+		}()
+
+		<-done
+
+		if len(rv) < 1 || len(rv) > 2 {
+			return workflowerrors.NewPermanentError(
+				tracing.WithSpanError(span, errors.New("activity has to return either (error) or (<result>, error)")))
+		}
+
+		// Convert activity result to payload. We always expect at least an error
+		if len(rv) > 1 {
+			var err error
+			result, err = e.converter.To(rv[0].Interface())
+			if err != nil {
+				return workflowerrors.NewPermanentError(tracing.WithSpanError(span, fmt.Errorf("converting activity result: %w", err)))
+			}
+		}
+
+		// Was an error returned?
+		errResult := rv[len(rv)-1]
+		if errResult.IsNil() {
+			// No error from activity execution
+			return nil
+		}
+
+		actErr, ok := errResult.Interface().(error)
+		if !ok {
+			return workflowerrors.NewPermanentError(
+				tracing.WithSpanError(span, fmt.Errorf("activity error result does not satisfy error interface (%T): %v", errResult, errResult)))
+		}
+
+		return workflowerrors.FromError(tracing.WithSpanError(span, actErr))
+	}
+
+	// Build the interceptor chain: interceptor[0] → ... → interceptor[n] → inner
+	// Combine global interceptors with per-activity interceptors
+	allInterceptors := e.interceptors
+	if perAct := e.r.GetActivityInterceptors(a.Name); len(perAct) > 0 {
+		allInterceptors = make([]interceptor.ActivityInterceptor, 0, len(e.interceptors)+len(perAct))
+		allInterceptors = append(allInterceptors, e.interceptors...)
+		allInterceptors = append(allInterceptors, perAct...)
+	}
+
+	handler := inner
+	for i := len(allInterceptors) - 1; i >= 0; i-- {
+		ic := allInterceptors[i]
+		next := handler
+		handler = func(ctx context.Context) error {
+			return ic.ExecuteActivity(ctx, info, next)
 		}
 	}
 
-	// Was an error returned?
-	errResult := rv[len(rv)-1]
-	if errResult.IsNil() {
-		// No error from activity execution
-		return result, nil
+	// Execute the chain
+	if err := handler(activityCtx); err != nil {
+		return result, err
 	}
 
-	err, ok := errResult.Interface().(error)
-	if !ok {
-		return nil, workflowerrors.NewPermanentError(
-			tracing.WithSpanError(span, fmt.Errorf("activity error result does not satisfy error interface (%T): %v", errResult, errResult)))
-	}
-
-	return result, workflowerrors.FromError(tracing.WithSpanError(span, err))
+	return result, nil
 }

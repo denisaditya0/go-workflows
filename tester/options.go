@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/cschleiden/go-workflows/backend/converter"
+	"github.com/cschleiden/go-workflows/interceptor"
 	"github.com/cschleiden/go-workflows/workflow"
 )
 
@@ -13,6 +14,7 @@ type options struct {
 	Logger           *slog.Logger
 	Converter        converter.Converter
 	Propagators      []workflow.ContextPropagator
+	Interceptors     []interceptor.Interceptor
 	InitialTime      time.Time
 	MaxHistorySize   int64
 	SingleWorkerMode bool
@@ -59,5 +61,12 @@ func WithMaxHistorySize(size int64) WorkflowTesterOption {
 func WithSingleWorkerMode(enabled bool) WorkflowTesterOption {
 	return func(o *options) {
 		o.SingleWorkerMode = enabled
+	}
+}
+
+// WithInterceptors adds interceptors that apply to workflow and activity execution during testing.
+func WithInterceptors(interceptors ...interceptor.Interceptor) WorkflowTesterOption {
+	return func(o *options) {
+		o.Interceptors = append(o.Interceptors, interceptors...)
 	}
 }

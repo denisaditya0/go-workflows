@@ -11,6 +11,7 @@ import (
 	"github.com/cschleiden/go-workflows/backend/history"
 	"github.com/cschleiden/go-workflows/backend/metrics"
 	"github.com/cschleiden/go-workflows/backend/payload"
+	"github.com/cschleiden/go-workflows/interceptor"
 	"github.com/cschleiden/go-workflows/internal/activity"
 	"github.com/cschleiden/go-workflows/internal/metrickeys"
 	im "github.com/cschleiden/go-workflows/internal/metrics"
@@ -24,8 +25,9 @@ func NewActivityWorker(
 	registry *registry.Registry,
 	clock clock.Clock,
 	options WorkerOptions,
+	interceptors []interceptor.Interceptor,
 ) *Worker[backend.ActivityTask, history.Event] {
-	ae := activity.NewExecutor(b.Options().Logger, b.Tracer(), b.Options().Converter, b.Options().ContextPropagators, registry)
+	ae := activity.NewExecutor(b.Options().Logger, b.Tracer(), b.Options().Converter, b.Options().ContextPropagators, registry, interceptors)
 
 	tw := &ActivityTaskWorker{
 		backend:              b,

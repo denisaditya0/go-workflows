@@ -12,6 +12,7 @@ import (
 	"github.com/cschleiden/go-workflows/backend/history"
 	"github.com/cschleiden/go-workflows/backend/metrics"
 	"github.com/cschleiden/go-workflows/core"
+	"github.com/cschleiden/go-workflows/interceptor"
 	"github.com/cschleiden/go-workflows/internal/log"
 	"github.com/cschleiden/go-workflows/internal/metrickeys"
 	im "github.com/cschleiden/go-workflows/internal/metrics"
@@ -33,26 +34,29 @@ func NewWorkflowWorker(
 	b backend.Backend,
 	registry *registry.Registry,
 	options WorkflowWorkerOptions,
+	interceptors []interceptor.Interceptor,
 ) *Worker[backend.WorkflowTask, executor.ExecutionResult] {
 	if options.WorkflowExecutorCache == nil {
 		options.WorkflowExecutorCache = cache.NewWorkflowExecutorLRUCache(b.Metrics(), options.WorkflowExecutorCacheSize, options.WorkflowExecutorCacheTTL)
 	}
 
 	tw := &WorkflowTaskWorker{
-		backend:  b,
-		registry: registry,
-		cache:    options.WorkflowExecutorCache,
-		logger:   b.Options().Logger,
+		backend:      b,
+		registry:     registry,
+		cache:        options.WorkflowExecutorCache,
+		logger:       b.Options().Logger,
+		interceptors: interceptors,
 	}
 
 	return NewWorker(b, tw, &options.WorkerOptions)
 }
 
 type WorkflowTaskWorker struct {
-	backend  backend.Backend
-	registry *registry.Registry
-	cache    executor.Cache
-	logger   *slog.Logger
+	backend      backend.Backend
+	registry     *registry.Registry
+	cache        executor.Cache
+	logger       *slog.Logger
+	interceptors []interceptor.Interceptor
 }
 
 func (wtw *WorkflowTaskWorker) Start(ctx context.Context, queues []workflow.Queue) error {
@@ -181,6 +185,7 @@ func (wtw *WorkflowTaskWorker) getExecutor(ctx context.Context, t *backend.Workf
 			t.Metadata,
 			clock.New(),
 			wtw.backend.Options().MaxHistorySize,
+			wtw.interceptors,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("creating workflow task executor: %w", err)
