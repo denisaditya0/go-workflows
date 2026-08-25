@@ -454,6 +454,14 @@ func (e *executor) handleWorkflowExecutionStarted(event *history.Event, a *histo
 		Instance: e.workflowState.Instance(),
 	}
 
+	// Expose raw inputs to interceptors
+	if len(a.Inputs) > 0 {
+		info.RawInputs = make([][]byte, len(a.Inputs))
+		for i, p := range a.Inputs {
+			info.RawInputs[i] = []byte(p)
+		}
+	}
+
 	// Combine global interceptors with per-workflow interceptors
 	allInterceptors := e.interceptors
 	if perWf := e.registry.GetWorkflowInterceptors(a.Name); len(perWf) > 0 {
