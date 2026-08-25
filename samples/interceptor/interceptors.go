@@ -9,7 +9,7 @@ import (
 )
 
 // DurationInterceptor tracks execution duration of workflows and activities.
-// This demonstrates how to write a custom interceptor.
+// This demonstrates a global interceptor that applies to everything.
 type DurationInterceptor struct {
 	interceptor.Base
 }
@@ -46,4 +46,21 @@ func (d *DurationInterceptor) ExecuteActivity(ctx context.Context, info *interce
 		info.Name, info.Attempt, duration, status)
 
 	return err
+}
+
+// ValidationInterceptor validates workflow input before execution.
+// This demonstrates a per-workflow interceptor — only attached to specific workflows.
+type ValidationInterceptor struct {
+	interceptor.Base // only override ExecuteWorkflow, activity passthrough
+}
+
+func (v *ValidationInterceptor) ExecuteWorkflow(ctx interceptor.WorkflowContext, info *interceptor.WorkflowInfo, next interceptor.WorkflowHandler) error {
+	fmt.Printf("  [validate] checking workflow=%s instance=%s\n", info.Name, info.Instance.InstanceID)
+
+	// Example: reject workflows with empty instance ID (would never happen, just for demo)
+	if info.Instance.InstanceID == "" {
+		return fmt.Errorf("rejected: workflow instance ID cannot be empty")
+	}
+
+	return next(ctx)
 }

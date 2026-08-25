@@ -8,6 +8,7 @@ import (
 	"github.com/cschleiden/go-workflows/backend"
 	"github.com/cschleiden/go-workflows/client"
 	"github.com/cschleiden/go-workflows/interceptor"
+	"github.com/cschleiden/go-workflows/registry"
 	"github.com/cschleiden/go-workflows/samples"
 	"github.com/cschleiden/go-workflows/worker"
 
@@ -66,7 +67,9 @@ func RunWorker(ctx context.Context, mb backend.Backend) *worker.Worker {
 		},
 	})
 
-	w.RegisterWorkflow(OrderWorkflow)
+	// Register workflow with a per-workflow interceptor (advanced)
+	// This ValidationInterceptor only runs for OrderWorkflow, not other workflows
+	w.RegisterWorkflow(OrderWorkflow, registry.WithWorkflowInterceptors(&ValidationInterceptor{}))
 
 	w.RegisterActivity(ValidateOrder)
 	w.RegisterActivity(ChargePayment)
