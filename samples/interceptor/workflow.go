@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/cschleiden/go-workflows/workflow"
 )
@@ -47,17 +48,21 @@ func ValidateOrder(ctx context.Context, input OrderInput) (bool, error) {
 	if input.CustomerID == "" {
 		return false, fmt.Errorf("missing customer ID")
 	}
+	// Simulate validation check
+	time.Sleep(100 * time.Millisecond)
 	return true, nil
 }
 
 func ChargePayment(ctx context.Context, customerID string, amount float64) (string, error) {
 	// Simulate payment processing
+	time.Sleep(250 * time.Millisecond)
 	txnID := fmt.Sprintf("txn-%s-%.0f", customerID, amount)
 	return txnID, nil
 }
 
 func SendConfirmation(ctx context.Context, customerID string, txnID string) (string, error) {
 	// Simulate sending confirmation email
+	time.Sleep(50 * time.Millisecond)
 	fmt.Printf("  → Confirmation sent to %s for transaction %s\n", customerID, txnID)
 	return "sent", nil
 }
