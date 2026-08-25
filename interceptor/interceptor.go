@@ -25,6 +25,11 @@ type WorkflowInfo struct {
 
 	// Instance is the workflow instance being executed.
 	Instance *core.WorkflowInstance
+
+	// RawInputs contains the raw serialized input payloads passed to the workflow.
+	// Each element is the JSON-encoded bytes of a workflow argument.
+	// This allows interceptors to inspect input without knowing the concrete types.
+	RawInputs [][]byte
 }
 
 // ActivityInfo provides metadata about the activity being executed.
