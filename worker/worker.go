@@ -165,33 +165,22 @@ func (w *Worker) RegisterActivity(a workflow.Activity, opts ...registry.Register
 // applyDefaults fills zero-value fields in options with values from DefaultOptions.
 // This allows users to only specify the fields they care about without losing defaults.
 func applyDefaults(o *Options) {
-	d := &DefaultOptions
+	d := DefaultOptions
 
-	// Workflow worker defaults
-	if o.WorkflowPollers == 0 {
-		o.WorkflowPollers = d.WorkflowPollers
-	}
-	if o.WorkflowPollingInterval == 0 {
-		o.WorkflowPollingInterval = d.WorkflowPollingInterval
-	}
-	if o.WorkflowHeartbeatInterval == 0 {
-		o.WorkflowHeartbeatInterval = d.WorkflowHeartbeatInterval
-	}
-	if o.WorkflowExecutorCacheSize == 0 {
-		o.WorkflowExecutorCacheSize = d.WorkflowExecutorCacheSize
-	}
-	if o.WorkflowExecutorCacheTTL == 0 {
-		o.WorkflowExecutorCacheTTL = d.WorkflowExecutorCacheTTL
-	}
+	setIfZero(&o.WorkflowPollers, d.WorkflowPollers)
+	setIfZero(&o.WorkflowPollingInterval, d.WorkflowPollingInterval)
+	setIfZero(&o.WorkflowHeartbeatInterval, d.WorkflowHeartbeatInterval)
+	setIfZero(&o.WorkflowExecutorCacheSize, d.WorkflowExecutorCacheSize)
+	setIfZero(&o.WorkflowExecutorCacheTTL, d.WorkflowExecutorCacheTTL)
 
-	// Activity worker defaults
-	if o.ActivityPollers == 0 {
-		o.ActivityPollers = d.ActivityPollers
-	}
-	if o.ActivityPollingInterval == 0 {
-		o.ActivityPollingInterval = d.ActivityPollingInterval
-	}
-	if o.ActivityHeartbeatInterval == 0 {
-		o.ActivityHeartbeatInterval = d.ActivityHeartbeatInterval
+	setIfZero(&o.ActivityPollers, d.ActivityPollers)
+	setIfZero(&o.ActivityPollingInterval, d.ActivityPollingInterval)
+	setIfZero(&o.ActivityHeartbeatInterval, d.ActivityHeartbeatInterval)
+}
+
+func setIfZero[T comparable](field *T, defaultVal T) {
+	var zero T
+	if *field == zero {
+		*field = defaultVal
 	}
 }
