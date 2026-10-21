@@ -1,3 +1,10 @@
+// Package executor is the deterministic workflow engine. Given a workflow task
+// from the backend, it replays history to rebuild in-memory state, feeds new
+// events to resolve pending futures and advance the workflow coroutine
+// (internal/sync), and collects the commands (internal/command) the workflow code
+// emits into events for the backend to persist. It is driven by the worker and
+// calls down into internal/sync and internal/command. See docs/architecture.md
+// ("How the workflow executor works").
 package executor
 
 import (

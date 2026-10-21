@@ -1,3 +1,7 @@
+// Package backend defines the Backend interface: the single source of truth for
+// persistence and task queues. Both the client and the worker talk only to a
+// Backend; the Backend never calls back into them. See docs/architecture.md for
+// the full control flow. The PostgreSQL implementation lives in backend/postgres.
 package backend
 
 import (

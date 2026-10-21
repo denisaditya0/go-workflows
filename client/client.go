@@ -1,3 +1,7 @@
+// Package client is the control plane and external entry point: create, signal,
+// cancel, and query workflow instances, and wait for results. It records intent
+// by calling the backend; it does not execute workflow or activity code and does
+// not call the worker. See docs/architecture.md (Flow A).
 package client
 
 import (

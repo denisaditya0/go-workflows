@@ -1,3 +1,7 @@
+// Package registry maps workflow and activity names to their Go function
+// implementations so the worker can resolve a task to the code that handles it.
+// It is populated via RegisterWorkflow/RegisterActivity and read by the worker
+// and executor. See docs/architecture.md.
 package registry
 
 import (

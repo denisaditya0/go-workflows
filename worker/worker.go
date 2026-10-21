@@ -1,3 +1,8 @@
+// Package worker is the execution plane. It polls the backend's workflow and
+// activity queues and runs the registered code: workflow tasks are handed to
+// workflow/executor, activity tasks to internal/activity. The worker calls down
+// into the backend and executor; nothing calls back up into it. See
+// docs/architecture.md (Flow B).
 package worker
 
 import (
