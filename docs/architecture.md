@@ -120,6 +120,84 @@ gaps, until it completes. **That cycle is "the flow."**
 
 ---
 
+## The real cycle, step by step
+
+To make the cycle concrete, here is the complete lifecycle of a trivial workflow
+that runs one activity and returns. Each row is one step in time; the columns
+show who acts and what changes in the backend. "WF task queue" = instances with
+rows in `pending_events`; "ACT task queue" = the `activities` table.
+
+```go
+func Workflow1(ctx workflow.Context, n int) (int, error) {
+    r, err := workflow.ExecuteActivity[int](ctx, opts, Add, n, 1).Get(ctx) // (*)
+    return r, err
+}
+func Add(ctx context.Context, a, b int) (int, error) { return a + b, nil }
+```
+
+```
+# | Actor                 | Action                                          | Backend state after
+--+-----------------------+-------------------------------------------------+---------------------------------
+1 | client                | CreateWorkflowInstance(Workflow1, 5)            | instances: [W1 active]
+  |                        | → backend.CreateWorkflowInstance                | history:   []
+  |                        |                                                 | WF queue:  [W1: ExecutionStarted]
+  |                        | returns immediately                             | ACT queue: []
+--+-----------------------+-------------------------------------------------+---------------------------------
+2 | worker (wf poller)    | GetWorkflowTask → W1 (new: ExecutionStarted)    | W1 locked by this worker
+--+-----------------------+-------------------------------------------------+---------------------------------
+3 | executor.ExecuteTask  | replay: none. execute ExecutionStarted:         | (in memory)
+  |                        |   start Workflow1 coroutine; it calls           |   future F1 pending (Add)
+  |                        |   ExecuteActivity(Add) → emits command C1;      |   command C1 = ScheduleActivity
+  |                        |   coroutine BLOCKS on .Get(ctx) (*)             |
+--+-----------------------+-------------------------------------------------+---------------------------------
+4 | executor → backend    | CompleteWorkflowTask(result):                   | history:   [ExecutionStarted,
+  |                        |   append history, enqueue activity, unlock      |             WFTaskStarted,
+  |                        |                                                 |             ActivityScheduled]
+  |                        |                                                 | WF queue:  []  (nothing pending)
+  |                        |                                                 | ACT queue: [Add(5,1) for W1]
+--+-----------------------+-------------------------------------------------+---------------------------------
+  | ...workflow is now idle. No WF task is pickable. It waits. ...          |
+--+-----------------------+-------------------------------------------------+---------------------------------
+5 | worker (act poller)   | GetActivityTask → Add(5,1)                      | activity locked
+--+-----------------------+-------------------------------------------------+---------------------------------
+6 | internal/activity     | run Add(ctx, 5, 1) → 6  (plain Go)              | (in memory) result = 6
+--+-----------------------+-------------------------------------------------+---------------------------------
+7 | act exec → backend    | CompleteActivityTask(6):                        | history:   [... ActivityCompleted]
+  |                        |   delete from ACT queue, write completed event  | WF queue:  [W1: ActivityCompleted]
+  |                        |                                                 | ACT queue: []
+--+-----------------------+-------------------------------------------------+---------------------------------
+8 | worker (wf poller)    | GetWorkflowTask → W1 (new: ActivityCompleted)   | W1 locked again
+--+-----------------------+-------------------------------------------------+---------------------------------
+9 | executor.ExecuteTask  | REPLAY ExecutionStarted again (rebuild state:   | (in memory, rebuilt)
+  |                        |   F1 pending, C1 committed), Replaying=true.    |   then F1 resolved = 6
+  |                        |   Then execute new ActivityCompleted:           |   coroutine runs past .Get(),
+  |                        |   resolve future F1=6, Continue() coroutine;    |   returns 6, workflow COMPLETES
+  |                        |   Workflow1 returns → CompleteWorkflow command  |
+--+-----------------------+-------------------------------------------------+---------------------------------
+10| executor → backend    | CompleteWorkflowTask(state=Finished):           | instances: [W1 finished]
+  |                        |   append WorkflowExecutionFinished, mark done   | history:   [... Finished]
+  |                        |                                                 | WF queue:  []   ACT queue: []
+--+-----------------------+-------------------------------------------------+---------------------------------
+11| client                | GetWorkflowResult(W1) → 6                       | (reads final history)
+```
+
+Key things this makes visible:
+
+- **Steps 1 and 11 are the only external touchpoints** (the client). Everything in
+  between is the worker + backend cycling on their own.
+- **The workflow coroutine is reconstructed twice** (step 3 and step 9). Step 9
+  *replays* ExecutionStarted before handling the new event — same code runs again,
+  but side effects (scheduling the activity) are **not** repeated because the
+  replayed command matches the already-persisted `ActivityScheduled` event. This
+  is the determinism contract in action.
+- **The activity (steps 5–7) runs completely separately** from the workflow, pulled
+  from its own queue, and feeds its result back by writing an event that re-arms
+  the workflow (step 7 → 8).
+- **Between step 4 and step 5 (and 7 and 8) the workflow is durably paused** in
+  Postgres. If every process crashed here, a new worker would resume from history.
+
+---
+
 ## How the workflow executor works (the heart)
 
 A workflow function does **not** run start-to-finish in one go. It runs on a
