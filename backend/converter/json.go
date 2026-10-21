@@ -8,6 +8,8 @@ import (
 
 type jsonConverter struct{}
 
+var _ Converter = (*jsonConverter)(nil)
+
 func (jc *jsonConverter) To(v interface{}) (payload.Payload, error) {
 	return json.Marshal(v)
 }

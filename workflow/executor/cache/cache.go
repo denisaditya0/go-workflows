@@ -16,6 +16,8 @@ type lruCache struct {
 	c  *ttlcache.Cache[string, executor.WorkflowExecutor]
 }
 
+var _ executor.Cache = (*lruCache)(nil)
+
 func NewWorkflowExecutorLRUCache(mc metrics.Client, size int, expiration time.Duration) *lruCache {
 	c := ttlcache.New(
 		ttlcache.WithCapacity[string, executor.WorkflowExecutor](uint64(size)),
