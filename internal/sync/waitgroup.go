@@ -12,6 +12,8 @@ type waitGroup struct {
 	waiting bool
 }
 
+var _ WaitGroup = (*waitGroup)(nil)
+
 func NewWaitGroup() WaitGroup {
 	return &waitGroup{
 		f: NewFuture[struct{}](),

@@ -4,6 +4,8 @@ type Scheduler struct {
 	coroutines []Coroutine
 }
 
+var _ CoroutineCreator = (*Scheduler)(nil)
+
 func NewScheduler() *Scheduler {
 	return &Scheduler{
 		coroutines: make([]Coroutine, 0),

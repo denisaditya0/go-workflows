@@ -110,6 +110,8 @@ var Canceled = errors.New("context canceled")
 // struct{}, since vars of this type must have distinct addresses.
 type emptyCtx int
 
+var _ Context = (*emptyCtx)(nil)
+
 func (*emptyCtx) Deadline() (deadline time.Time, ok bool) {
 	return
 }
@@ -326,6 +328,11 @@ type cancelCtx struct {
 	cause    error                 // set to non-nil by the first cancel call
 }
 
+var (
+	_ Context  = (*cancelCtx)(nil)
+	_ canceler = (*cancelCtx)(nil)
+)
+
 func (c *cancelCtx) Value(key interface{}) interface{} {
 	if key == &cancelCtxKey {
 		return c
@@ -403,6 +410,8 @@ type valueCtx struct {
 	Context
 	key, val interface{}
 }
+
+var _ Context = (*valueCtx)(nil)
 
 func (c *valueCtx) Value(key interface{}) interface{} {
 	if c.key == key {

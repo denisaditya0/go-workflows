@@ -41,6 +41,8 @@ type errGroup struct {
 	creator CoroutineCreator
 }
 
+var _ ErrGroup = (*errGroup)(nil)
+
 // WithErrGroup creates a child Context and an ErrGroup. The returned Context is canceled
 // automatically when any function started with g.Go returns a non-nil error.
 func WithErrGroup(parent Context) (Context, ErrGroup) {

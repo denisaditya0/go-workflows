@@ -30,6 +30,12 @@ type future[T any] struct {
 	err      error
 }
 
+var (
+	_ Future[struct{}]         = (*future[struct{}])(nil)
+	_ SettableFuture[struct{}] = (*future[struct{}])(nil)
+	_ FutureInternal[struct{}] = (*future[struct{}])(nil)
+)
+
 func (f *future[T]) Set(v T, err error) {
 	f.v = v
 	f.err = err

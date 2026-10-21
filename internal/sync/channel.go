@@ -30,8 +30,11 @@ type ChannelInternal[T any] interface {
 	RemoveReceiveCallback(rcb *Receiver[T])
 }
 
-// Ensure channel implementation support internal interface
-var _ ChannelInternal[struct{}] = (*channel[struct{}])(nil)
+// Ensure channel implementation supports the public and internal interfaces
+var (
+	_ Channel[struct{}]         = (*channel[struct{}])(nil)
+	_ ChannelInternal[struct{}] = (*channel[struct{}])(nil)
+)
 
 func NewChannel[T any]() Channel[T] {
 	return &channel[T]{

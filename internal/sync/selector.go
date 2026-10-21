@@ -96,6 +96,13 @@ type defaultCase struct {
 	fn func(Context)
 }
 
+var (
+	_ SelectCase = (*futureCase[struct{}])(nil)
+	_ SelectCase = (*channelReceiveCase[struct{}])(nil)
+	_ SelectCase = (*channelSendCase[struct{}])(nil)
+	_ SelectCase = (*defaultCase)(nil)
+)
+
 func (dc *defaultCase) Ready() bool {
 	return true
 }

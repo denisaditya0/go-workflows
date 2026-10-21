@@ -62,6 +62,8 @@ type coState struct {
 	creator CoroutineCreator
 }
 
+var _ Coroutine = (*coState)(nil)
+
 func NewCoroutine(ctx Context, fn func(ctx Context) error) Coroutine {
 	s := newState()
 	ctx = withCoState(ctx, s)
