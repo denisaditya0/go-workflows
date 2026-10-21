@@ -45,11 +45,8 @@ $ go run .h -h
         Number of activities to execute per leaf workflow (default 2)
   -backend string
         Backend to use. Supported backends are:
-        - redis
-        - mysql
-        - sqlite
         - postgres
-         (default "redis")
+         (default "postgres")
   -cachesize int
         Size of the workflow executor cache (default 128)
   -depth int

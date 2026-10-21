@@ -623,31 +623,16 @@ if err != nil {
 
 ### Automatically expiring finished workflow instances
 
-This differs for different backend implementations.
-
-#### SQLite & MySQL
-
 ```go
 client.StartAutoExpiration(ctx context.Context, delay time.Duration)
 ```
 
 When you call this on a client, a workflow will be started in the `system` queue that will periodically run and remove finished workflow instances that are older than the specified delay.
 
-<div style="clear: both"></div>
-
-#### Redis
-
-```go
-b, err := redis.NewRedisBackend(redisClient, redis.WithAutoExpiration(time.Hour * 48))
-// ...
-```
-
-When an `AutoExpiration` is passed to the backend, finished workflow instances will be automatically removed after the specified duration. This works by setting a TTL on the Redis keys for finished workflow instances. If `AutoExpiration` is set to `0` (the default), no TTL will be set.
-
 ## Logging
 
 ```go
-b := sqlite.NewInMemoryBackend(backend.WithLogger(slog.New(slog.Config{Level: slog.LevelDebug}))
+b := postgres.NewPostgresBackend("localhost", 5432, "user", "password", "workflows", postgres.WithBackendOptions(backend.WithLogger(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug})))))
 ```
 
 go-workflows supports structured logging using Go's `slog` package. `slog.Default` is used by default, pass a custom logger with `backend.WithLogger` when creating a backend instance.

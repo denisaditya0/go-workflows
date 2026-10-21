@@ -17,7 +17,7 @@ TEST_FLAGS=-race -count=1 -v
 TEST_SHORT_FLAGS=-short $(TEST_FLAGS)
 
 # Build targets
-.PHONY: all build clean test test-integration test-redis test-mysql test-postgres test-sqlite test-backends lint fmt
+.PHONY: all build clean test test-integration test-postgres test-backends lint fmt
 
 # Default target
 all: build test lint
@@ -37,33 +37,13 @@ test-integration:
 	@echo "Running all tests..."
 	$(GOTEST) $(TEST_FLAGS) -timeout $(TEST_TIMEOUT) ./...
 
-# Run Redis backend tests
-test-redis:
-	@echo "Running Redis backend tests..."
-	$(GOTEST) $(TEST_FLAGS) -timeout $(TEST_TIMEOUT) github.com/cschleiden/go-workflows/backend/redis
-
-# Run MySQL backend tests
-test-mysql:
-	@echo "Running MySQL backend tests..."
-	$(GOTEST) $(TEST_FLAGS) -timeout $(TEST_TIMEOUT) github.com/cschleiden/go-workflows/backend/mysql
-
 # Run Postgres backend tests
 test-postgres:
 	@echo "Running Postgres backend tests..."
 	$(GOTEST) $(TEST_FLAGS) -timeout $(TEST_TIMEOUT) github.com/cschleiden/go-workflows/backend/postgres
 
-# Run SQLite backend tests
-test-sqlite:
-	@echo "Running SQLite backend tests..."
-	$(GOTEST) $(TEST_FLAGS) -timeout $(TEST_TIMEOUT) github.com/cschleiden/go-workflows/backend/sqlite
-
-# Run monoprocess backend tests
-test-monoprocess:
-	@echo "Running monoprocess backend tests..."
-	$(GOTEST) $(TEST_FLAGS) -timeout $(TEST_TIMEOUT) github.com/cschleiden/go-workflows/backend/monoprocess
-
 # Run all backend tests
-test-backends: test-redis test-mysql test-postgres test-sqlite test-monoprocess
+test-backends: test-postgres
 
 custom-gcl:
 	@echo "Checking if golangci-lint is installed..."
@@ -86,6 +66,5 @@ clean:
 	@echo "Cleaning..."
 	$(GOCLEAN)
 	rm -f coverage.out coverage.html
-	rm -f *.sqlite
 	rm -f report.xml
 

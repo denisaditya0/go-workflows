@@ -1,6 +1,6 @@
 # go-workflows Development Guide for AI Agents
 
-Durable workflows library for Go that borrows heavily from Temporal and DTFx. Supports multiple backends (MySQL, Redis, SQLite, in-memory) and provides comprehensive workflow orchestration capabilities.
+Durable workflows library for Go that borrows heavily from Temporal and DTFx. This fork uses a single PostgreSQL backend and provides comprehensive workflow orchestration capabilities.
 
 This guide provides essential information for AI coding agents working on this project. Always reference this information first before exploring the codebase or running commands.
 
@@ -81,11 +81,8 @@ The `.golangci.yml` configuration enables multiple linters including:
 
 ### Sample Applications
 ```bash
-# Simple workflow example with Redis backend (default)
+# Simple workflow example (PostgreSQL backend; requires docker compose up -d)
 cd samples/simple && go run .
-
-# Simple workflow with SQLite backend
-cd samples/simple && go run . -backend sqlite
 
 # Benchmark utility
 cd bench && go run .
@@ -102,20 +99,12 @@ Always test core workflow functionality after making changes:
 
 1. **Simple End-to-End Test:**
    ```bash
-   cd samples/simple && go run . -backend sqlite
+   # Requires docker compose up -d
+   cd samples/simple && go run .
    ```
    Expected output: "Workflow finished. Result: 59"
 
-2. **Multi-Backend Test:**
-   ```bash
-   # Test Redis backend (requires docker compose up)
-   cd samples/simple && go run .
-
-   # Test SQLite backend (embedded)
-   cd samples/simple && go run . -backend sqlite
-   ```
-
-3. **Benchmark Validation:**
+2. **Benchmark Validation:**
    ```bash
    cd bench && go run .
    ```
@@ -143,9 +132,9 @@ Execute these scenarios to verify workflow functionality:
    - Verify hierarchical workflow creation and execution
    - Check metrics output shows expected activity and workflow counts
 
-3. **Backend Switching:**
-   - Test same workflow with different backends (Redis, SQLite)
-   - Verify consistent behavior across backends
+3. **Multiprocess Execution:**
+   - Run multiple workers against the same Postgres database
+   - Verify tasks are distributed across workers without duplication
 
 ## Repository Structure
 
@@ -156,12 +145,8 @@ Execute these scenarios to verify workflow functionality:
   - `subworkflow/` - Nested workflow patterns
   - `timer/` - Timer and scheduling examples
   - `signal/` - Signal handling patterns
-- **`/backend/`** - Storage backend implementations:
-  - `mysql/` - MySQL backend
-  - `redis/` - Redis backend
+- **`/backend/`** - Storage backend implementation:
   - `postgres/` - PostgreSQL backend
-  - `sqlite/` - SQLite backend
-  - `monoprocess/` - In-memory backend
 - **`/workflow/`** - Core workflow execution engine
 - **`/activity/`** - Activity execution framework
 - **`/tester/`** - Testing utilities for workflow development
@@ -171,7 +156,7 @@ Execute these scenarios to verify workflow functionality:
 
 ### Build and Configuration Files
 - **`go.mod`** - Go module definition with all dependencies
-- **`docker-compose.yml`** - Development dependencies (MySQL, Redis)
+- **`docker-compose.yml`** - Development dependencies (PostgreSQL)
 - **`.golangci.yml`** - Linting configuration (includes custom analyzer)
 - **`tools.go`** - Development tool dependencies
 - **`.github/workflows/go.yml`** - CI pipeline definition
@@ -180,7 +165,7 @@ Execute these scenarios to verify workflow functionality:
 The project requires Docker services for full functionality:
 
 ```bash
-# Start MySQL and Redis services
+# Start PostgreSQL service
 docker compose up -d
 
 # Check service status
@@ -198,8 +183,8 @@ docker compose down
 ### Adding New Workflow Examples
 1. Create directory under `samples/`
 2. Implement workflow and activity functions
-3. Add backend selection similar to existing samples
-4. Test with multiple backends
+3. Use the shared `samples.GetBackend` helper for Postgres wiring
+4. Test against the local Postgres instance
 5. Add to documentation
 
 ### Backend Development
@@ -246,7 +231,7 @@ docker compose down
 The GitHub Actions workflow (`.github/workflows/go.yml`) performs:
 1. Build validation across Go versions
 2. Short tests on main branch
-3. Backend-specific tests (Redis, MySQL, SQLite) in parallel
+3. PostgreSQL backend integration tests
 4. Test reporting with summaries
 
 Ensure local changes pass the same validation steps that CI runs.
@@ -255,7 +240,7 @@ Ensure local changes pass the same validation steps that CI runs.
 
 ### Code Modification Guidelines
 1. Always run validation tests after making changes
-2. Test with multiple backends when modifying core functionality
+2. Test against the Postgres backend when modifying core functionality
 3. Maintain backward compatibility in API changes
 4. Follow existing code patterns and conventions
 5. Update relevant documentation and examples
@@ -316,7 +301,7 @@ The documentation covers:
 - **Quickstart Guide** - Basic workflow and activity examples
 - **Comprehensive Guide** - Detailed API documentation and patterns
 - **Sample Applications** - Real-world usage examples from `/samples/`
-- **Backend Configuration** - Setup guides for MySQL, Redis, SQLite backends
+- **Backend Configuration** - Setup guide for the PostgreSQL backend
 - **FAQ Section** - Common questions and troubleshooting
 
 ### Documentation Dependencies

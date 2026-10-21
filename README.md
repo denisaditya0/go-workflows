@@ -74,21 +74,21 @@ func runWorker(ctx context.Context, mb backend.Backend) {
 
 ### Backend
 
-The backend is responsible for persisting the workflow events. Currently there is an in-memory backend implementation for testing, one using [SQLite](http://sqlite.org), one using MySQL, one using PostgreSQL, and one using Redis.
+The backend is responsible for persisting the workflow events. This fork uses a single [PostgreSQL](https://www.postgresql.org) backend.
 
 ```go
-b := sqlite.NewSqliteBackend("simple.sqlite")
+b := postgres.NewPostgresBackend("localhost", 5432, "user", "password", "workflows")
 ```
 
 ### Putting it all together
 
-We can start workflows from the same process the worker runs in -- or they can be separate. Here we use the SQLite backend, spawn a single worker (which then executes both `Workflows` and `Activities`), and then start a single instance of our workflow
+We can start workflows from the same process the worker runs in -- or they can be separate. Here we use the PostgreSQL backend, spawn a single worker (which then executes both `Workflows` and `Activities`), and then start a single instance of our workflow
 
 ```go
 func main() {
 	ctx := context.Background()
 
-	b := sqlite.NewSqliteBackend("simple.sqlite")
+	b := postgres.NewPostgresBackend("localhost", 5432, "user", "password", "workflows")
 
 	go runWorker(ctx, b)
 

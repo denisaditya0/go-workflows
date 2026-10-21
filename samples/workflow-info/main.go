@@ -10,7 +10,7 @@ import (
 	"github.com/cschleiden/go-workflows/worker"
 	"github.com/cschleiden/go-workflows/workflow"
 
-	"github.com/cschleiden/go-workflows/backend/sqlite"
+	"github.com/cschleiden/go-workflows/backend/postgres"
 )
 
 // Workflow demonstrates accessing workflow info including history length
@@ -51,8 +51,8 @@ func Activity(ctx context.Context) error {
 func main() {
 	ctx := context.Background()
 
-	// Create in-memory SQLite backend
-	b := sqlite.NewInMemoryBackend()
+	// Create Postgres backend (uses the local docker-compose instance)
+	b := postgres.NewPostgresBackend("localhost", 5432, "root", "root", "postgres")
 
 	// Create worker
 	w := worker.New(b, nil)

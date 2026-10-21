@@ -25,7 +25,7 @@ go-workflows is an embedded engine for orchestrating long running processes or "
 
 It borrows heavily from [Temporal](https://github.com/temporalio/temporal) (and since it's a fork also [Cadence](https://github.com/uber/cadence)) as well as Azure's [Durable Task Framework (DTFx)](https://github.com/Azure/durabletask). Workflows are written in plain Go.
 
-go-workflows support pluggable backends with official implementations for Sqlite, MySQL, PostgreSQL, and Redis.
+This fork of go-workflows uses a single [PostgreSQL](https://www.postgresql.org) backend.
 
 See also the following blog posts:
 
@@ -102,10 +102,10 @@ Backends support multiple worker processes, so you can scale out horizontially.
 ## Backend
 
 ```go
-b := sqlite.NewSqliteBackend("simple.sqlite")
+b := postgres.NewPostgresBackend("localhost", 5432, "user", "password", "workflows")
 ```
 
-The backend is responsible for persisting the workflow events. Currently there is an in-memory backend implementation for testing, one using [SQLite](http://sqlite.org), one using MySql, and one using Redis. See [backends](#backends) for more information.
+The backend is responsible for persisting the workflow events. This fork uses a single [PostgreSQL](https://www.postgresql.org) backend. See [backends](#backends) for more information.
 
 ## Putting it all together
 
@@ -113,7 +113,7 @@ The backend is responsible for persisting the workflow events. Currently there i
 func main() {
 	ctx := context.Background()
 
-	b := sqlite.NewSqliteBackend("simple.sqlite")
+	b := postgres.NewPostgresBackend("localhost", 5432, "user", "password", "workflows")
 
 	go runWorker(ctx, b)
 
@@ -134,7 +134,7 @@ func main() {
 
 To finish the example, we create the backend, start a worker in a separate go-routine. We then create a `Client` instance which we then  use to create a new _workflow instance_. A workflow instance is just one running instance of a previously registered workflow.
 
-With the exception of the in-memory backend, we do not have to start the workflow from the same process the worker runs in, we could create the client from another process and create/wait for/cancel/... workflow instances from there.
+We do not have to start the workflow from the same process the worker runs in, we could create the client from another process and create/wait for/cancel/... workflow instances from there.
 
 ## Using the WorkflowOrchestrator
 
@@ -166,7 +166,7 @@ func FormatResult(ctx context.Context, input string, value int) (string, error) 
 func main() {
 	ctx := context.Background()
 
-	b := sqlite.NewSqliteBackend("simple.sqlite")
+	b := postgres.NewPostgresBackend("localhost", 5432, "user", "password", "workflows")
 
 	// Create orchestrator instead of separate client and worker
 	orchestrator := worker.NewWorkflowOrchestrator(b, nil)
