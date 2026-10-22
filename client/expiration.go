@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/internal/workflows"
+	"github.com/cschleiden/go-workflows/internal/systemworkflows"
 )
 
 const expirationWorkflowInstanceID = "expiration"
@@ -22,10 +22,10 @@ func (c *Client) StartAutoExpiration(ctx context.Context, delay time.Duration) e
 
 	_, err := c.CreateWorkflowInstance(ctx, WorkflowInstanceOptions{
 		InstanceID: expirationWorkflowInstanceID,
-	}, workflows.ExpireWorkflowInstances, delay)
+	}, systemworkflows.ExpireWorkflowInstances, delay)
 	if err != nil {
 		if errors.Is(err, backend.ErrInstanceAlreadyExists) {
-			err = c.SignalWorkflow(ctx, expirationWorkflowInstanceID, workflows.UpdateExpirationSignal, delay)
+			err = c.SignalWorkflow(ctx, expirationWorkflowInstanceID, systemworkflows.UpdateExpirationSignal, delay)
 			if err != nil {
 				return fmt.Errorf("updating expiration workflow: %w", err)
 			}

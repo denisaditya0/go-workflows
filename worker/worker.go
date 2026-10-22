@@ -15,7 +15,7 @@ import (
 	"github.com/cschleiden/go-workflows/client"
 	"github.com/cschleiden/go-workflows/internal/signals"
 	internal "github.com/cschleiden/go-workflows/internal/workerengine"
-	"github.com/cschleiden/go-workflows/internal/workflows"
+	"github.com/cschleiden/go-workflows/internal/systemworkflows"
 	"github.com/cschleiden/go-workflows/registry"
 	"github.com/cschleiden/go-workflows/workflow"
 )
@@ -68,11 +68,11 @@ func newWorker(backend backend.Backend, registry *registry.Registry, workers []w
 		panic(fmt.Errorf("registering internal activities: %w", err))
 	}
 
-	if err := registry.RegisterActivity(&workflows.Activities{Backend: backend}); err != nil {
+	if err := registry.RegisterActivity(&systemworkflows.Activities{Backend: backend}); err != nil {
 		panic(fmt.Errorf("registering internal activities: %w", err))
 	}
 
-	if err := registry.RegisterWorkflow(workflows.ExpireWorkflowInstances); err != nil {
+	if err := registry.RegisterWorkflow(systemworkflows.ExpireWorkflowInstances); err != nil {
 		panic(fmt.Errorf("registering internal workflow: %w", err))
 	}
 
