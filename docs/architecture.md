@@ -377,3 +377,62 @@ layer above the engine** (as implemented here: the dedup key is handled in the
 API/handler layer before `CreateWorkflowInstance` is called). This matches
 Temporal's own guidance that long-term dedup should be kept in a separate
 datastore rather than relying on the engine.
+
+
+
+### Best practice: a declarative registration layer with schema-derived dedup
+
+A convenient way to structure a service on top of this engine is to add a small
+**declarative registration layer** above `worker.RegisterWorkflow` /
+`client.CreateWorkflowInstance`. Each workflow is described once by a definition
+that carries its input type (with a JSON schema), metadata, and — importantly —
+how its **deduplication key** is derived. The engine itself stays unaware of any
+of this; it only ever sees a name and an `InstanceID`.
+
+A typical definition looks like:
+
+```go
+type WorkflowDef struct {
+    Fn          workflow.Workflow        // the registered function
+    NewInput    func() any               // input factory → JSON schema + validation
+    Name        string                   // logical name / trigger
+    // Dedup: how to build the InstanceID from the request body.
+    DedupField  []string                 // e.g. ["TestID","Service","Env"] → id = name-<f1>-<f2>-<f3>
+    DedupStatic string                   // fixed key → one instance id for all runs (serialize)
+    // ... queue, cron, signals, visibility, etc.
+}
+```
+
+Flow:
+
+```
+HTTP request (JSON body)
+  └─> registration layer:
+        1. look up the WorkflowDef by trigger/name
+        2. validate the body against the def's JSON schema
+        3. build a deterministic InstanceID from the body using DedupField
+           (or DedupStatic) — this IS the dedup key
+  └─> client.CreateWorkflowInstance(ctx, {InstanceID: id}, def.Fn, input)
+        └─> backend rejects a duplicate ACTIVE instance (ErrInstanceAlreadyExists)
+```
+
+Why this works well:
+
+- **Dedup is data-driven and lives above the engine.** The key is computed from
+  validated request fields, so the same request always maps to the same
+  `InstanceID`. The engine's "one active instance per `InstanceID`" rule then
+  provides the actual guard.
+- **`DedupField`** gives per-request dedup (one running instance per unique field
+  tuple). **`DedupStatic`** collapses all runs onto a single `InstanceID`, which
+  serializes them — a second trigger while one is active is rejected. Useful for
+  "only one of these may run at a time" workflows.
+- **Schema validation happens before anything durable is created**, so malformed
+  requests never reach the backend.
+- For **cron / singleton** workflows, use the trigger name as a deterministic
+  `InstanceID` (rather than a fresh UUID) so overlapping ticks skip instead of
+  stacking up.
+
+This keeps the engine thin (name + ID) while all policy — validation, naming,
+dedup, visibility — lives in one declarative layer you control. Long-term dedup
+(across completed runs) still belongs in your own datastore if you need it, per
+the note above.
