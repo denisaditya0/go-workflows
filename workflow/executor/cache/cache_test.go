@@ -14,9 +14,9 @@ import (
 	"github.com/cschleiden/go-workflows/backend/metadata"
 	"github.com/cschleiden/go-workflows/core"
 	"github.com/cschleiden/go-workflows/internal/metrics"
+	"github.com/cschleiden/go-workflows/internal/workflowengine"
 	"github.com/cschleiden/go-workflows/registry"
 	"github.com/cschleiden/go-workflows/workflow"
-	"github.com/cschleiden/go-workflows/workflow/executor"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
 )
@@ -28,7 +28,7 @@ func Test_Cache_StoreAndGet(t *testing.T) {
 	require.NoError(t, r.RegisterWorkflow(workflowWithActivity))
 
 	i := core.NewWorkflowInstance("instanceID", "executionID")
-	e, err := executor.NewExecutor(
+	e, err := workflowengine.NewExecutor(
 		slog.Default(), noop.NewTracerProvider().Tracer(backend.TracerName), r, converter.DefaultConverter,
 		[]workflow.ContextPropagator{}, &testHistoryProvider{}, i, &metadata.WorkflowMetadata{}, clock.New(),
 		10_000,
@@ -36,7 +36,7 @@ func Test_Cache_StoreAndGet(t *testing.T) {
 	require.NoError(t, err)
 
 	i2 := core.NewWorkflowInstance("instanceID2", "executionID2")
-	e2, err := executor.NewExecutor(
+	e2, err := workflowengine.NewExecutor(
 		slog.Default(), noop.NewTracerProvider().Tracer(backend.TracerName), r, converter.DefaultConverter,
 		[]workflow.ContextPropagator{}, &testHistoryProvider{}, i, &metadata.WorkflowMetadata{}, clock.New(),
 		10_000,
@@ -70,7 +70,7 @@ func Test_Cache_AutoEviction(t *testing.T) {
 	i := core.NewWorkflowInstance("instanceID", "executionID")
 	r := registry.New()
 	require.NoError(t, r.RegisterWorkflow(workflowWithActivity))
-	e, err := executor.NewExecutor(
+	e, err := workflowengine.NewExecutor(
 		slog.Default(), noop.NewTracerProvider().Tracer(backend.TracerName), r,
 		converter.DefaultConverter, []workflow.ContextPropagator{}, &testHistoryProvider{}, i,
 		&metadata.WorkflowMetadata{}, clock.New(),
@@ -101,7 +101,7 @@ func Test_Cache_Evict(t *testing.T) {
 	i := core.NewWorkflowInstance("instanceID", "executionID")
 	r := registry.New()
 	require.NoError(t, r.RegisterWorkflow(workflowWithActivity))
-	e, err := executor.NewExecutor(
+	e, err := workflowengine.NewExecutor(
 		slog.Default(), noop.NewTracerProvider().Tracer(backend.TracerName), r,
 		converter.DefaultConverter, []workflow.ContextPropagator{}, &testHistoryProvider{}, i,
 		&metadata.WorkflowMetadata{}, clock.New(),

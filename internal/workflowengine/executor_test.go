@@ -1,4 +1,4 @@
-package executor
+package workflowengine
 
 import (
 	"context"
@@ -21,6 +21,7 @@ import (
 	"github.com/cschleiden/go-workflows/internal/sync"
 	"github.com/cschleiden/go-workflows/registry"
 	wf "github.com/cschleiden/go-workflows/workflow"
+	executorapi "github.com/cschleiden/go-workflows/workflow/executor"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -35,7 +36,7 @@ func (t *testHistoryProvider) GetWorkflowInstanceHistory(ctx context.Context, in
 	return t.history, nil
 }
 
-func newExecutor(r *registry.Registry, i *core.WorkflowInstance, historyProvider WorkflowHistoryProvider) (*executor, error) {
+func newExecutor(r *registry.Registry, i *core.WorkflowInstance, historyProvider executorapi.WorkflowHistoryProvider) (*executor, error) {
 	logger := slog.Default()
 	tracer := noop.NewTracerProvider().Tracer("test")
 

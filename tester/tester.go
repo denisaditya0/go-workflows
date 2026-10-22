@@ -24,6 +24,7 @@ import (
 	"github.com/cschleiden/go-workflows/internal/fn"
 	"github.com/cschleiden/go-workflows/internal/log"
 	"github.com/cschleiden/go-workflows/internal/signals"
+	"github.com/cschleiden/go-workflows/internal/workflowengine"
 	"github.com/cschleiden/go-workflows/internal/workflowerrors"
 	"github.com/cschleiden/go-workflows/registry"
 	"github.com/cschleiden/go-workflows/workflow"
@@ -361,7 +362,7 @@ func (wt *workflowTester[TResult]) Execute(ctx context.Context, args ...any) {
 			// Reuse cached executor or create a new one
 			if tw.executor == nil {
 				var err error
-				tw.executor, err = executor.NewExecutor(
+				tw.executor, err = workflowengine.NewExecutor(
 					wt.logger,
 					wt.tracer,
 					wt.registry,

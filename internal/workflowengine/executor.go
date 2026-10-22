@@ -1,11 +1,12 @@
-// Package executor is the deterministic workflow engine. Given a workflow task
+// Package workflowengine is the deterministic workflow engine. Given a workflow task
 // from the backend, it replays history to rebuild in-memory state, feeds new
 // events to resolve pending futures and advance the workflow coroutine
 // (internal/sync), and collects the commands (internal/command) the workflow code
 // emits into events for the backend to persist. It is driven by the worker and
-// calls down into internal/sync and internal/command. See docs/architecture.md
-// ("How the workflow executor works").
-package executor
+// calls down into internal/sync and internal/command. The public contract types
+// (WorkflowExecutor, ExecutionResult, Cache) live in workflow/executor. See
+// docs/architecture.md ("How the workflow executor works").
+package workflowengine
 
 import (
 	"context"
@@ -34,40 +35,14 @@ import (
 	"github.com/cschleiden/go-workflows/internal/workflowstate"
 	"github.com/cschleiden/go-workflows/registry"
 	wf "github.com/cschleiden/go-workflows/workflow"
+	executorapi "github.com/cschleiden/go-workflows/workflow/executor"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
-type ExecutionResult struct {
-	// New state of the workflow instance
-	State core.WorkflowInstanceState
-
-	// Events executed during the tastk execution
-	Executed []*history.Event
-
-	// Activities that were scheduled
-	ActivityEvents []*history.Event
-
-	// Timers that were scheduled
-	TimerEvents []*history.Event
-
-	// Events for other workflow instances
-	WorkflowEvents []*history.WorkflowEvent
-}
-
-type WorkflowHistoryProvider interface {
-	GetWorkflowInstanceHistory(ctx context.Context, instance *core.WorkflowInstance, lastSequenceID *int64) ([]*history.Event, error)
-}
-
-type WorkflowExecutor interface {
-	ExecuteTask(ctx context.Context, t *backend.WorkflowTask) (*ExecutionResult, error)
-
-	Close()
-}
-
 type executor struct {
 	registry          *registry.Registry
-	historyProvider   WorkflowHistoryProvider
+	historyProvider   executorapi.WorkflowHistoryProvider
 	workflow          *workflow
 	workflowName      string
 	workflowState     *workflowstate.WfState
@@ -90,12 +65,12 @@ func NewExecutor(
 	r *registry.Registry,
 	cv converter.Converter,
 	propagators []wf.ContextPropagator,
-	historyProvider WorkflowHistoryProvider,
+	historyProvider executorapi.WorkflowHistoryProvider,
 	instance *core.WorkflowInstance,
 	metadata *metadata.WorkflowMetadata,
 	clock clock.Clock,
 	maxHistorySize int64,
-) (WorkflowExecutor, error) {
+) (executorapi.WorkflowExecutor, error) {
 	s := workflowstate.NewWorkflowState(instance, logger, tracer, clock)
 
 	wfCtx := sync.Background()
@@ -130,7 +105,7 @@ func NewExecutor(
 	}, nil
 }
 
-func (e *executor) ExecuteTask(ctx context.Context, t *backend.WorkflowTask) (*ExecutionResult, error) {
+func (e *executor) ExecuteTask(ctx context.Context, t *backend.WorkflowTask) (*executorapi.ExecutionResult, error) {
 	logger := e.logger.With(
 		log.TaskIDKey, t.ID,
 	)
@@ -149,7 +124,7 @@ func (e *executor) ExecuteTask(ctx context.Context, t *backend.WorkflowTask) (*E
 				log.ScheduleEventIDKey, event.ScheduleEventID)
 		}
 
-		return &ExecutionResult{
+		return &executorapi.ExecutionResult{
 			State: core.WorkflowInstanceStateFinished,
 		}, nil
 	}
@@ -224,7 +199,7 @@ func (e *executor) ExecuteTask(ctx context.Context, t *backend.WorkflowTask) (*E
 		log.WorkflowInstanceStateKey, state,
 	)
 
-	return &ExecutionResult{
+	return &executorapi.ExecutionResult{
 		State:          state,
 		Executed:       executedEvents,
 		ActivityEvents: activityEvents,

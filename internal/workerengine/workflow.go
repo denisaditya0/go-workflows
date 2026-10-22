@@ -16,6 +16,7 @@ import (
 	"github.com/cschleiden/go-workflows/internal/metrickeys"
 	im "github.com/cschleiden/go-workflows/internal/metrics"
 	"github.com/cschleiden/go-workflows/registry"
+	"github.com/cschleiden/go-workflows/internal/workflowengine"
 	"github.com/cschleiden/go-workflows/workflow/executor"
 	"github.com/cschleiden/go-workflows/workflow/executor/cache"
 )
@@ -166,7 +167,7 @@ func (wtw *WorkflowTaskWorker) getExecutor(ctx context.Context, t *backend.Workf
 	}
 
 	if !ok {
-		e, err = executor.NewExecutor(
+		e, err = workflowengine.NewExecutor(
 			wtw.logger.With(
 				slog.String(log.InstanceIDKey, t.WorkflowInstance.InstanceID),
 				slog.String(log.ExecutionIDKey, t.WorkflowInstance.ExecutionID),
