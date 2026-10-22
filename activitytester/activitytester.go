@@ -5,7 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/activity"
+	"github.com/cschleiden/go-workflows/internal/activityengine"
 )
 
 // WithActivityTestState returns a context with an activity state attached that can be used for unit testing
@@ -15,5 +15,5 @@ func WithActivityTestState(ctx context.Context, activityID, instanceID string, l
 		logger = slog.Default()
 	}
 
-	return activity.WithActivityState(ctx, activity.NewActivityState(activityID, 0, core.NewWorkflowInstance(instanceID, ""), logger))
+	return activityengine.WithActivityState(ctx, activityengine.NewActivityState(activityID, 0, core.NewWorkflowInstance(instanceID, ""), logger))
 }

@@ -18,7 +18,7 @@ import (
 	"github.com/cschleiden/go-workflows/backend/metadata"
 	"github.com/cschleiden/go-workflows/backend/payload"
 	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/activity"
+	"github.com/cschleiden/go-workflows/internal/activityengine"
 	"github.com/cschleiden/go-workflows/internal/args"
 	"github.com/cschleiden/go-workflows/internal/command"
 	"github.com/cschleiden/go-workflows/internal/fn"
@@ -723,7 +723,7 @@ func (wt *workflowTester[TResult]) scheduleActivity(wfi *core.WorkflowInstance, 
 				)
 			}
 		} else {
-			executor := activity.NewExecutor(wt.logger, wt.tracer, wt.converter, wt.propagators, wt.registry)
+			executor := activityengine.NewExecutor(wt.logger, wt.tracer, wt.converter, wt.propagators, wt.registry)
 			activityResult, activityErr = executor.ExecuteActivity(context.Background(), &backend.ActivityTask{
 				ID:               uuid.NewString(),
 				WorkflowInstance: wfi,

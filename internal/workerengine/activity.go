@@ -1,4 +1,4 @@
-package worker
+package workerengine
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"github.com/cschleiden/go-workflows/backend/metrics"
 	"github.com/cschleiden/go-workflows/backend/payload"
 	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/activity"
+	"github.com/cschleiden/go-workflows/internal/activityengine"
 	"github.com/cschleiden/go-workflows/internal/metrickeys"
 	im "github.com/cschleiden/go-workflows/internal/metrics"
 	"github.com/cschleiden/go-workflows/internal/workflowerrors"
@@ -25,7 +25,7 @@ func NewActivityWorker(
 	clock clock.Clock,
 	options WorkerOptions,
 ) *Worker[backend.ActivityTask, history.Event] {
-	ae := activity.NewExecutor(b.Options().Logger, b.Tracer(), b.Options().Converter, b.Options().ContextPropagators, registry)
+	ae := activityengine.NewExecutor(b.Options().Logger, b.Tracer(), b.Options().Converter, b.Options().ContextPropagators, registry)
 
 	tw := &ActivityTaskWorker{
 		backend:              b,
@@ -39,7 +39,7 @@ func NewActivityWorker(
 
 type ActivityTaskWorker struct {
 	backend              backend.Backend
-	activityTaskExecutor *activity.Executor
+	activityTaskExecutor *activityengine.Executor
 	clock                clock.Clock
 	logger               *slog.Logger
 }
