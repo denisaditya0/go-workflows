@@ -76,9 +76,40 @@ from your REST API.)
 
 ## Flow B — A worker processes tasks (the execution loop; no MVC analogy)
 
-A worker runs two independent pollers against the backend.
+### The general loop (one model for everything)
 
-### B1 — Workflow task
+Although the worker runs two pollers, they are the **same loop** over different
+task types. A workflow is really a **chain of steps** (activities, timers,
+signals, sub-workflows); each step is dispatched, run, and its result written back
+as an event that unblocks the next step. Generalized:
+
+```
+            ┌───────────────────────── backend (Postgres) ─────────────────────────┐
+            │   instances + pending_events (WF tasks)   +   activities (ACT tasks)   │
+            └───────────────────────────────────────────────────────────────────────┘
+                     ▲  pull task                       │  write result event
+                     │  (GetXxxTask)                     ▼  (CompleteXxxTask)
+            ┌─────────┴───────────────────────────────────────────────┐
+            │                      worker poll loop                     │
+            │  1. pull next ready task from a queue                     │
+            │  2. run it:                                               │
+            │       • WF task  → executor replays history, advances the │
+            │                    workflow coroutine until it blocks,    │
+            │                    emitting the NEXT steps as commands     │
+            │       • ACT task → run the plain-Go activity function      │
+            │  3. write resulting event(s) back to the backend          │
+            └───────────────────────────────────────────────────────────┘
+                     │
+                     └── the written event makes some instance "ready" again,
+                         so the loop picks it up → next step in the chain
+```
+
+So "workflow vs activity worker" is just **which queue the step came from**. The
+unifying idea: *every step produces an event; every event (eventually) triggers
+the next step; the workflow coroutine is the thing that decides what the next
+step is.* The two detailed cases below are specializations of this one loop.
+
+### B1 — Workflow task (decide the next step)
 ```
 worker.Start()
   └─> (internal/worker) poll loop
@@ -99,7 +130,7 @@ worker.Start()
               • create sub-workflow instances / deliver signals
 ```
 
-### B2 — Activity task
+### B2 — Activity task (do one step's work)
 ```
 worker.Start()
   └─> (internal/worker) poll loop
