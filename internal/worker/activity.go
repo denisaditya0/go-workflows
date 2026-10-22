@@ -11,12 +11,12 @@ import (
 	"github.com/cschleiden/go-workflows/backend/history"
 	"github.com/cschleiden/go-workflows/backend/metrics"
 	"github.com/cschleiden/go-workflows/backend/payload"
+	"github.com/cschleiden/go-workflows/core"
 	"github.com/cschleiden/go-workflows/internal/activity"
 	"github.com/cschleiden/go-workflows/internal/metrickeys"
 	im "github.com/cschleiden/go-workflows/internal/metrics"
 	"github.com/cschleiden/go-workflows/internal/workflowerrors"
 	"github.com/cschleiden/go-workflows/registry"
-	"github.com/cschleiden/go-workflows/workflow"
 )
 
 func NewActivityWorker(
@@ -52,7 +52,7 @@ func (atw *ActivityTaskWorker) Complete(ctx context.Context, result *history.Eve
 	return nil
 }
 
-func (atw *ActivityTaskWorker) Start(ctx context.Context, queues []workflow.Queue) error {
+func (atw *ActivityTaskWorker) Start(ctx context.Context, queues []core.Queue) error {
 	if err := atw.backend.PrepareActivityQueues(ctx, queues); err != nil {
 		return fmt.Errorf("preparing activity queues: %w", err)
 	}
@@ -82,7 +82,7 @@ func (atw *ActivityTaskWorker) Extend(ctx context.Context, task *backend.Activit
 	return atw.backend.ExtendActivityTask(ctx, task)
 }
 
-func (atw *ActivityTaskWorker) Get(ctx context.Context, queues []workflow.Queue) (*backend.ActivityTask, error) {
+func (atw *ActivityTaskWorker) Get(ctx context.Context, queues []core.Queue) (*backend.ActivityTask, error) {
 	return atw.backend.GetActivityTask(ctx, queues)
 }
 

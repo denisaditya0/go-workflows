@@ -13,7 +13,6 @@ import (
 
 	"github.com/cschleiden/go-workflows/backend"
 	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -113,12 +112,12 @@ type mockTaskWorker struct {
 	mock.Mock
 }
 
-func (m *mockTaskWorker) Start(ctx context.Context, queues []workflow.Queue) error {
+func (m *mockTaskWorker) Start(ctx context.Context, queues []core.Queue) error {
 	args := m.Called(ctx, queues)
 	return args.Error(0)
 }
 
-func (m *mockTaskWorker) Get(ctx context.Context, queues []workflow.Queue) (*testTask, error) {
+func (m *mockTaskWorker) Get(ctx context.Context, queues []core.Queue) (*testTask, error) {
 	args := m.Called(ctx, queues)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -180,7 +179,7 @@ func TestNewWorker(t *testing.T) {
 		require.NotNil(t, worker.dispatcherDone)
 
 		// Should add default queue if none provided
-		require.Contains(t, worker.options.Queues, workflow.QueueDefault)
+		require.Contains(t, worker.options.Queues, core.QueueDefault)
 		// Should always include system queue
 		require.Contains(t, worker.options.Queues, core.QueueSystem)
 	})
@@ -189,11 +188,11 @@ func TestNewWorker(t *testing.T) {
 		mockBackend := createMockBackend()
 		mockTaskWorker := &mockTaskWorker{}
 
-		customQueue := workflow.Queue("custom")
+		customQueue := core.Queue("custom")
 		options := &WorkerOptions{
 			Pollers:          1,
 			MaxParallelTasks: 1,
-			Queues:           []workflow.Queue{customQueue},
+			Queues:           []core.Queue{customQueue},
 		}
 
 		worker := NewWorker(mockBackend, mockTaskWorker, options)
@@ -210,7 +209,7 @@ func TestNewWorker(t *testing.T) {
 		options := &WorkerOptions{
 			Pollers:          1,
 			MaxParallelTasks: 1,
-			Queues:           []workflow.Queue{workflow.QueueDefault, core.QueueSystem},
+			Queues:           []core.Queue{core.QueueDefault, core.QueueSystem},
 		}
 
 		worker := NewWorker(mockBackend, mockTaskWorker, options)
@@ -234,7 +233,7 @@ func TestWorker_Start(t *testing.T) {
 		options := &WorkerOptions{
 			Pollers:          2,
 			MaxParallelTasks: 5,
-			Queues:           []workflow.Queue{workflow.QueueDefault},
+			Queues:           []core.Queue{core.QueueDefault},
 		}
 
 		worker := NewWorker(mockBackend, mockTaskWorker, options)
@@ -242,9 +241,9 @@ func TestWorker_Start(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		mockTaskWorker.On("Start", ctx, mock.MatchedBy(func(queues []workflow.Queue) bool {
+		mockTaskWorker.On("Start", ctx, mock.MatchedBy(func(queues []core.Queue) bool {
 			return len(queues) == 2 && // QueueDefault + QueueSystem
-				queues[0] == workflow.QueueDefault &&
+				queues[0] == core.QueueDefault &&
 				queues[1] == core.QueueSystem
 		})).Return(nil)
 

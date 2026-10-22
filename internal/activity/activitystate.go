@@ -4,18 +4,18 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/cschleiden/go-workflows/core"
 	"github.com/cschleiden/go-workflows/internal/log"
-	"github.com/cschleiden/go-workflows/workflow"
 )
 
 type ActivityState struct {
 	ActivityID string
 	Attempt    int
-	Instance   *workflow.Instance
+	Instance   *core.WorkflowInstance
 	Logger     *slog.Logger
 }
 
-func NewActivityState(activityID string, attempt int, instance *workflow.Instance, logger *slog.Logger) *ActivityState {
+func NewActivityState(activityID string, attempt int, instance *core.WorkflowInstance, logger *slog.Logger) *ActivityState {
 	return &ActivityState{
 		activityID,
 		attempt,

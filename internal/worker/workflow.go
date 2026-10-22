@@ -16,7 +16,6 @@ import (
 	"github.com/cschleiden/go-workflows/internal/metrickeys"
 	im "github.com/cschleiden/go-workflows/internal/metrics"
 	"github.com/cschleiden/go-workflows/registry"
-	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/cschleiden/go-workflows/workflow/executor"
 	"github.com/cschleiden/go-workflows/workflow/executor/cache"
 )
@@ -55,7 +54,7 @@ type WorkflowTaskWorker struct {
 	logger   *slog.Logger
 }
 
-func (wtw *WorkflowTaskWorker) Start(ctx context.Context, queues []workflow.Queue) error {
+func (wtw *WorkflowTaskWorker) Start(ctx context.Context, queues []core.Queue) error {
 	if wtw.cache != nil {
 		go wtw.cache.StartEviction(ctx)
 	}
@@ -146,7 +145,7 @@ func (wtw *WorkflowTaskWorker) Extend(ctx context.Context, t *backend.WorkflowTa
 	return wtw.backend.ExtendWorkflowTask(ctx, t)
 }
 
-func (wtw *WorkflowTaskWorker) Get(ctx context.Context, queues []workflow.Queue) (*backend.WorkflowTask, error) {
+func (wtw *WorkflowTaskWorker) Get(ctx context.Context, queues []core.Queue) (*backend.WorkflowTask, error) {
 	t, err := wtw.backend.GetWorkflowTask(ctx, queues)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {

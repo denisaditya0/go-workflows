@@ -11,12 +11,11 @@ import (
 
 	"github.com/cschleiden/go-workflows/backend"
 	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/workflow"
 )
 
 type TaskWorker[Task, Result any] interface {
-	Start(context.Context, []workflow.Queue) error
-	Get(context.Context, []workflow.Queue) (*Task, error)
+	Start(context.Context, []core.Queue) error
+	Get(context.Context, []core.Queue) (*Task, error)
 	Extend(context.Context, *Task) error
 	Execute(context.Context, *Task) (*Result, error)
 	Complete(context.Context, *Result, *Task) error
@@ -56,7 +55,7 @@ type WorkerOptions struct {
 	// Defaults to 2.0 if MaxPollingInterval is set.
 	BackoffMultiplier float64
 
-	Queues []workflow.Queue
+	Queues []core.Queue
 }
 
 func NewWorker[Task, TaskResult any](
@@ -64,7 +63,7 @@ func NewWorker[Task, TaskResult any](
 ) *Worker[Task, TaskResult] {
 	// If no queues given, add the default queue
 	if len(options.Queues) == 0 {
-		options.Queues = append(options.Queues, workflow.QueueDefault)
+		options.Queues = append(options.Queues, core.QueueDefault)
 	}
 
 	// Always include system queue
