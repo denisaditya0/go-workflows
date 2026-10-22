@@ -336,3 +336,44 @@ that instance.
 **Caveat:** correctness now depends on **your** IDs being unique per spawned
 instance. Derive them from something unique per item (e.g. `"order-"+orderID`); a
 duplicate ID is rejected and the existing instance keeps running.
+
+
+
+### Recommended pattern: generate known IDs upstream
+
+`SpawnWorkflow` (and `client.CreateWorkflowInstance`) deliberately use the
+`InstanceID` **you** provide; they do not invent a signalable ID for you. The
+recommended pattern is therefore to **generate a known ID in the layer above the
+engine** — e.g. your REST/API handler — and pass it down:
+
+```
+HTTP request
+  └─> your handler: derive a stable, unique ID (your dedup key lives here)
+        id := "order-" + orderID
+  └─> client.CreateWorkflowInstance(ctx, {InstanceID: id}, Orchestrator, ...)
+         │
+         └─> Orchestrator workflow spawns children with derived, known IDs:
+               for i, item := range items {
+                   childID := id + "-child-" + item.Key   // deterministic & known
+                   workflow.SpawnWorkflow(ctx, workflow.SpawnOptions{
+                       InstanceID: childID,
+                   }, Child, item)
+               }
+  ── later, from anywhere ──
+  client.SignalWorkflow(ctx, "order-123-child-abc", "sig", payload)  // reaches it
+```
+
+Because the IDs are chosen upstream and derived deterministically, every spawned
+instance is **addressable without any lookup**: you can reconstruct the ID from
+the same business data and signal/cancel it.
+
+**Where dedup lives.** The engine does *not* provide a dedup key. The registry
+only maps workflow/activity *names* to functions — it has no ID or dedup concept.
+The backend enforces only "one **active** instance per `InstanceID`"
+(`createInstance` returns `ErrInstanceAlreadyExists` for an active duplicate), and
+there is no `WorkflowIdReusePolicy` like Temporal/Cadence. So any real
+deduplication — especially across already-completed runs — belongs in **your
+layer above the engine** (as implemented here: the dedup key is handled in the
+API/handler layer before `CreateWorkflowInstance` is called). This matches
+Temporal's own guidance that long-term dedup should be kept in a separate
+datastore rather than relying on the engine.
