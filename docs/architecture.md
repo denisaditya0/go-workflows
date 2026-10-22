@@ -283,3 +283,56 @@ retryable. To trigger work externally, start a (possibly trivial) workflow.
 This determinism boundary is also where future **interceptors/middleware** must be
 careful: an activity interceptor is plain Go, but a workflow interceptor runs
 inside the replay loop and must not introduce non-determinism.
+
+
+
+---
+
+## Launching workflows from a workflow: sub-workflow vs spawn
+
+A running workflow can start other workflows two ways. They look similar but
+model different relationships, and picking the wrong one causes real bugs.
+
+### CreateSubWorkflowInstance — parent/child, awaited
+
+- Records a `SubWorkflowScheduled` (7) event on the **parent's** history and emits
+  a `WorkflowExecutionStarted` (1) to the child.
+- The child is a `core.NewSubWorkflowInstance(id, exec, parent, scheduleEventID)` —
+  it carries a **parent link**, and the parent **tracks a future** for it.
+- The parent can **await the child's result**; parent completion/cancellation
+  propagates to the child.
+- If you omit `InstanceID`, the child gets a **random UUID**. If you pass a fixed
+  `InstanceID` inside a loop, every iteration collides on the same ID and the
+  backend rejects the duplicates (`ErrInstanceAlreadyExists`).
+
+Use it for **fan-out/fan-in**: the parent starts children and waits for their
+results.
+
+### SpawnWorkflow — detached, top-level, fire-and-forget
+
+- Emits only a `WorkflowExecutionStarted` (1) for a **new top-level instance**.
+  Nothing is recorded on the calling workflow's history, and **no future is
+  tracked** (so the caller never trips the pending-futures check).
+- No parent/child link; the spawned workflow is **not** canceled when the caller
+  completes or is canceled.
+- `InstanceID` is **required** and used verbatim, so the spawned instance stays
+  addressable: it can be signalled and cancelled by ID via
+  `client.SignalWorkflow` / `client.CancelWorkflowInstance`.
+
+Use it when a workflow needs to launch **independent, individually-addressable**
+instances — e.g. an orchestrator that loops over items and starts one long-lived,
+signalable workflow per item.
+
+### Why spawn exists (the loop-of-signalable-children problem)
+
+With `CreateSubWorkflowInstance` in a loop, you cannot get stable per-instance
+addressability: omitting `InstanceID` yields unpredictable UUIDs, and reusing an
+`InstanceID` collides so only the first survives. Either way you cannot reliably
+signal an individual child. `SpawnWorkflow` fixes this by requiring a
+deterministic, caller-chosen `InstanceID` and creating a detached top-level
+instance — so `client.SignalWorkflow("order-123", ...)` always reaches exactly
+that instance.
+
+**Caveat:** correctness now depends on **your** IDs being unique per spawned
+instance. Derive them from something unique per item (e.g. `"order-"+orderID`); a
+duplicate ID is rejected and the existing instance keeps running.
