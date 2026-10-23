@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/cschleiden/go-workflows/core"
@@ -39,8 +38,8 @@ type SpawnOptions struct {
 // InstanceID is required. If a workflow instance with the same InstanceID already exists,
 // the backend rejects the duplicate and the existing instance is left running.
 func SpawnWorkflow(ctx Context, options SpawnOptions, wf Workflow, args ...any) (*core.WorkflowInstance, error) {
-	if options.InstanceID == "" {
-		return nil, errors.New("SpawnWorkflow: InstanceID is required")
+	if err := core.ValidateInstanceID(options.InstanceID); err != nil {
+		return nil, err
 	}
 
 	// If the context is already canceled, do not spawn.

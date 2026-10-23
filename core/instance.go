@@ -1,5 +1,30 @@
 package core
 
+import (
+	"errors"
+	"fmt"
+)
+
+// MaxInstanceIDLength is the maximum allowed length of a workflow InstanceID. It
+// matches the instance_id column width in the Postgres schema (varchar(256)).
+const MaxInstanceIDLength = 256
+
+// ErrInstanceIDTooLong is returned when a provided InstanceID exceeds MaxInstanceIDLength.
+var ErrInstanceIDTooLong = errors.New("instance ID too long")
+
+// ValidateInstanceID checks that an InstanceID is non-empty and within the storage
+// length bound. It returns a clear error instead of letting an oversize value fail
+// later at the database.
+func ValidateInstanceID(instanceID string) error {
+	if instanceID == "" {
+		return errors.New("instance ID must not be empty")
+	}
+	if len(instanceID) > MaxInstanceIDLength {
+		return fmt.Errorf("%w: %d > %d", ErrInstanceIDTooLong, len(instanceID), MaxInstanceIDLength)
+	}
+	return nil
+}
+
 type WorkflowInstance struct {
 	// InstanceID is the ID of the workflow instance.
 	InstanceID string `json:"instance_id,omitempty"`

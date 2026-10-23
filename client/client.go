@@ -75,8 +75,8 @@ func (c *Client) CreateWorkflowInstance(ctx context.Context, options WorkflowIns
 		return nil, fmt.Errorf("converting arguments: %w", err)
 	}
 
-	if options.InstanceID == "" {
-		return nil, errors.New("InstanceID must be set")
+	if err := core.ValidateInstanceID(options.InstanceID); err != nil {
+		return nil, err
 	}
 
 	if options.Queue == "" {
