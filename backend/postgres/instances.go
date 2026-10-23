@@ -12,6 +12,7 @@ import (
 	"github.com/cschleiden/go-workflows/backend/history"
 	"github.com/cschleiden/go-workflows/core"
 	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func (pb *postgresBackend) CreateWorkflowInstance(ctx context.Context, instance *workflow.Instance, event *history.Event) error {
@@ -323,10 +324,26 @@ func createInstance(ctx context.Context, tx *sql.Tx, queue workflow.Queue, wfi *
 		core.WorkflowInstanceStateActive,
 	)
 	if err != nil {
+		// The partial unique index idx_instances_active_instance_id guarantees at most one
+		// active instance per instance_id. Under concurrent creates the fast-path SELECT
+		// above can miss a not-yet-committed row, so the index is the real guard: a unique
+		// violation here means another active instance already exists.
+		if isUniqueViolation(err) {
+			return backend.ErrInstanceAlreadyExists
+		}
 		return fmt.Errorf("inserting workflow instance: %w", err)
 	}
 
 	return nil
+}
+
+// isUniqueViolation reports whether err is a Postgres unique-constraint violation (SQLSTATE 23505).
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505"
+	}
+	return false
 }
 
 // SignalWorkflow signals a running workflow instance

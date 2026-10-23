@@ -42,6 +42,7 @@ backend := postgres.NewPostgresBackendWithDB(db, postgres.WithApplyMigrations(tr
 
 - `WithPostgresOptions(f func(db *sql.DB))` - Apply custom options to the PostgreSQL database connection
 - `WithApplyMigrations(applyMigrations bool)` - Set whether migrations should be applied on startup. Defaults to `true` for `NewPostgresBackend`, `false` for `NewPostgresBackendWithDB`
+- `WithSchema(schema string)` - Target a specific Postgres schema for all tables instead of the role's default (normally `public`). The schema name must be a valid unquoted identifier; it is created if missing, and `search_path` is pinned to it for both migrations and runtime queries. When using `NewPostgresBackendWithDB`, ensure the provided connection's `search_path` includes the schema (or set it via the DSN).
 - `WithBackendOptions(opts ...backend.BackendOption)` - Apply generic backend options
 
 

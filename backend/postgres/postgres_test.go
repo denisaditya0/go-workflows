@@ -3,13 +3,18 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/cschleiden/go-workflows/backend"
 	"github.com/cschleiden/go-workflows/backend/history"
 	"github.com/cschleiden/go-workflows/backend/test"
+	"github.com/cschleiden/go-workflows/core"
+	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -326,4 +331,89 @@ func Test_PostgresBackendWithDB(t *testing.T) {
 			t.Errorf("Table should exist after migrations: %v", err)
 		}
 	})
+}
+
+
+// Test_PostgresBackend_ConcurrentCreate verifies the fix for the duplicate active
+// instance race (upstream #489): N concurrent CreateWorkflowInstance calls with the
+// same InstanceID must result in exactly one active instance; the rest must fail
+// with ErrInstanceAlreadyExists. Without the partial unique index, multiple active
+// rows could be created.
+func Test_PostgresBackend_ConcurrentCreate(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	adminDB, err := sql.Open("pgx", fmt.Sprintf("host=localhost port=5432 user=%s password=%s dbname=postgres sslmode=disable", testUser, testPassword))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Close()
+
+	dbName := "test_race_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if _, err := adminDB.Exec("CREATE DATABASE " + dbName); err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Exec("DROP DATABASE IF EXISTS " + dbName + " WITH (FORCE)")
+
+	b := NewPostgresBackend("localhost", 5432, testUser, testPassword, dbName)
+	defer b.db.Close()
+
+	ctx := context.Background()
+	instanceID := "race-" + uuid.NewString()
+
+	const n = 20
+	var wg sync.WaitGroup
+	results := make([]error, n)
+	start := make(chan struct{})
+
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			<-start // release all goroutines at once to maximize contention
+			results[idx] = b.CreateWorkflowInstance(
+				ctx,
+				core.NewWorkflowInstance(instanceID, uuid.NewString()),
+				history.NewHistoryEvent(1, time.Now(), history.EventType_WorkflowExecutionStarted, &history.ExecutionStartedAttributes{
+					Queue: workflow.QueueDefault,
+				}),
+			)
+		}(i)
+	}
+
+	close(start)
+	wg.Wait()
+
+	success := 0
+	alreadyExists := 0
+	for _, err := range results {
+		switch {
+		case err == nil:
+			success++
+		case errors.Is(err, backend.ErrInstanceAlreadyExists):
+			alreadyExists++
+		default:
+			t.Fatalf("unexpected error from CreateWorkflowInstance: %v", err)
+		}
+	}
+
+	if success != 1 {
+		t.Fatalf("expected exactly 1 successful create, got %d (alreadyExists=%d)", success, alreadyExists)
+	}
+	if alreadyExists != n-1 {
+		t.Fatalf("expected %d ErrInstanceAlreadyExists, got %d", n-1, alreadyExists)
+	}
+
+	// Confirm exactly one active row exists for the instance id.
+	var activeCount int
+	if err := b.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM instances WHERE instance_id = $1 AND state = $2",
+		instanceID, core.WorkflowInstanceStateActive,
+	).Scan(&activeCount); err != nil {
+		t.Fatal(err)
+	}
+	if activeCount != 1 {
+		t.Fatalf("expected exactly 1 active instance row, got %d", activeCount)
+	}
 }

@@ -12,6 +12,7 @@
 package postgres
 
 import (
+	"context"
 	"database/sql"
 	"embed"
 	"errors"
@@ -45,7 +46,16 @@ func NewPostgresBackend(host string, port int, user, password, database string, 
 		opt(options)
 	}
 
+	if err := options.validateSchema(); err != nil {
+		panic(err)
+	}
+
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, database)
+	if options.Schema != "" {
+		// pgx accepts search_path as a DSN keyword; applied per physical connection
+		// so it survives pool churn.
+		dsn += fmt.Sprintf(" search_path=%s", options.Schema)
+	}
 
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -85,6 +95,10 @@ func NewPostgresBackendWithDB(db *sql.DB, opts ...option) *postgresBackend {
 
 	for _, opt := range opts {
 		opt(options)
+	}
+
+	if err := options.validateSchema(); err != nil {
+		panic(err)
 	}
 
 	b := &postgresBackend{
@@ -140,7 +154,21 @@ func (pb *postgresBackend) Migrate() error {
 		needsClose = false
 	}
 
-	dbi, err := postgres.WithInstance(db, &postgres.Config{})
+	// When a non-default schema is configured, ensure it exists and target it for
+	// migrations (including the schema_migrations bookkeeping table). The schema
+	// name is validated to be a safe identifier in the constructor.
+	migrateConfig := &postgres.Config{}
+	if pb.options.Schema != "" {
+		if _, err := db.ExecContext(context.Background(), fmt.Sprintf(`CREATE SCHEMA IF NOT EXISTS "%s"`, pb.options.Schema)); err != nil {
+			if needsClose {
+				_ = db.Close()
+			}
+			return fmt.Errorf("creating schema %q: %w", pb.options.Schema, err)
+		}
+		migrateConfig.SchemaName = pb.options.Schema
+	}
+
+	dbi, err := postgres.WithInstance(db, migrateConfig)
 	if err != nil {
 		return fmt.Errorf("creating migration instance: %w", err)
 	}
