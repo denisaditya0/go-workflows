@@ -12,3 +12,6 @@ custom-gcl
 
 # Docs build artifacts
 docs/build/
+
+# Local test Postgres data dir (portable pg, see pg.bat/pg.sh style)
+.pgtest/
