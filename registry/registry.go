@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/fn"
+	"github.com/cschleiden/go-workflows/internal/common/fn"
 )
 
 type Registry struct {

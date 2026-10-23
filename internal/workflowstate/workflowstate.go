@@ -10,7 +10,7 @@ import (
 	"github.com/cschleiden/go-workflows/backend/payload"
 	"github.com/cschleiden/go-workflows/core"
 	"github.com/cschleiden/go-workflows/internal/command"
-	log "github.com/cschleiden/go-workflows/internal/log"
+	log "github.com/cschleiden/go-workflows/internal/common/log"
 	"github.com/cschleiden/go-workflows/internal/sync"
 	"go.opentelemetry.io/otel/trace"
 )

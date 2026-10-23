@@ -6,7 +6,7 @@ import (
 
 	"github.com/cschleiden/go-workflows/backend/metrics"
 	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/metrickeys"
+	"github.com/cschleiden/go-workflows/internal/common/metrickeys"
 	"github.com/cschleiden/go-workflows/workflow/executor"
 	"github.com/jellydator/ttlcache/v3"
 )

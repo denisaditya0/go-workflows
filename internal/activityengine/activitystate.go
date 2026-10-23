@@ -5,7 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/log"
+	"github.com/cschleiden/go-workflows/internal/common/log"
 )
 
 type ActivityState struct {

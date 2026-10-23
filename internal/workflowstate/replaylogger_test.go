@@ -8,7 +8,7 @@ import (
 
 	"github.com/benbjohnson/clock"
 	"github.com/cschleiden/go-workflows/core"
-	log "github.com/cschleiden/go-workflows/internal/log"
+	log "github.com/cschleiden/go-workflows/internal/common/log"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
