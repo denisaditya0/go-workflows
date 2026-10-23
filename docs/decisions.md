@@ -81,9 +81,14 @@ so they are not lost.
   sequence objects. Cosmetic type smell — deferred.
 - **`parent_schedule_event_id` is `numeric`** while sibling event-id columns are
   `bigint`/`bigserial`. Inconsistent and heavier than needed. Cosmetic — deferred.
-- **`queue` varchar(128): `core.ValidQueue` exists (caps 31) but is not wired** into
-  the create path. Low risk (queue names are short/static), but wiring it would give a
-  clean error instead of relying on the DB limit.
+- **`queue` varchar(128): `core.ValidQueue` NOW WIRED.** Validation (regex
+  `^[a-zA-Z0-9_-]{4,31}$`) is called in `client.CreateWorkflowInstance` (after the
+  empty→default substitution), on `worker` `WorkflowQueues`/`ActivityQueues` at
+  construction (panics, matching existing registration-error behavior), and on
+  non-empty `SpawnWorkflow`/`CreateSubWorkflowInstance` queues. NOTE: this is a
+  **behavior change** — queue names outside 4–31 chars or with illegal characters are
+  now rejected (previously they reached the DB). `default`/`_system_` and the existing
+  sample/test queues all pass.
 - **`worker` varchar(64): user-settable via `WithWorkerName`, unvalidated.** Default
   `"worker-"+UUID` (43) fits; a custom name > 64 would overflow at the DB. Low risk.
 - **`metadata` / `data` are `bytea`** (unbounded) — no width risk; see the jsonb/gob

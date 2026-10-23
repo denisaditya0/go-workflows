@@ -83,6 +83,10 @@ func (c *Client) CreateWorkflowInstance(ctx context.Context, options WorkflowIns
 		options.Queue = workflow.QueueDefault
 	}
 
+	if err := core.ValidQueue(options.Queue); err != nil {
+		return nil, fmt.Errorf("invalid queue %q: %w", options.Queue, err)
+	}
+
 	wfi := core.NewWorkflowInstance(options.InstanceID, uuid.NewString())
 	metadata := &workflow.Metadata{}
 

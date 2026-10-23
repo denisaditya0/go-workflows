@@ -13,6 +13,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/cschleiden/go-workflows/backend"
 	"github.com/cschleiden/go-workflows/client"
+	"github.com/cschleiden/go-workflows/core"
 	"github.com/cschleiden/go-workflows/internal/signals"
 	"github.com/cschleiden/go-workflows/internal/systemworkflows"
 	internal "github.com/cschleiden/go-workflows/internal/workerengine"
@@ -89,6 +90,8 @@ func newActivityWorker(backend backend.Backend, registry *registry.Registry, opt
 		options = &DefaultOptions.ActivityWorkerOptions
 	}
 
+	validateQueues(options.ActivityQueues)
+
 	activityWorker := internal.NewActivityWorker(backend, registry, clock.New(), internal.WorkerOptions{
 		Pollers:            options.ActivityPollers,
 		PollingInterval:    options.ActivityPollingInterval,
@@ -106,6 +109,8 @@ func newWorkflowWorker(backend backend.Backend, registry *registry.Registry, opt
 	if options == nil {
 		options = &DefaultOptions.WorkflowWorkerOptions
 	}
+
+	validateQueues(options.WorkflowQueues)
 
 	workflowWorker := internal.NewWorkflowWorker(backend, registry, internal.WorkflowWorkerOptions{
 		WorkerOptions: internal.WorkerOptions{
@@ -158,4 +163,16 @@ func (w *Worker) RegisterWorkflow(wf workflow.Workflow, opts ...registry.Registe
 // RegisterActivity registers an activity with the worker's registry.
 func (w *Worker) RegisterActivity(a workflow.Activity, opts ...registry.RegisterOption) error {
 	return w.registry.RegisterActivity(a, opts...)
+}
+
+
+// validateQueues panics if any configured queue name is invalid. Worker
+// construction already panics on internal registration errors, so this keeps the
+// same fail-fast behavior for misconfigured queue names.
+func validateQueues(queues []workflow.Queue) {
+	for _, q := range queues {
+		if err := core.ValidQueue(q); err != nil {
+			panic(fmt.Errorf("invalid worker queue %q: %w", q, err))
+		}
+	}
 }

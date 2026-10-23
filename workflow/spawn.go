@@ -42,6 +42,12 @@ func SpawnWorkflow(ctx Context, options SpawnOptions, wf Workflow, args ...any) 
 		return nil, err
 	}
 
+	if options.Queue != "" {
+		if err := core.ValidQueue(options.Queue); err != nil {
+			return nil, fmt.Errorf("invalid queue %q: %w", options.Queue, err)
+		}
+	}
+
 	// If the context is already canceled, do not spawn.
 	if ctx.Err() != nil {
 		return nil, ctx.Err()

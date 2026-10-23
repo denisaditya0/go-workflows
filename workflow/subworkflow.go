@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/cschleiden/go-workflows/backend/metadata"
+	"github.com/cschleiden/go-workflows/core"
 	a "github.com/cschleiden/go-workflows/internal/args"
 	"github.com/cschleiden/go-workflows/internal/command"
 	"github.com/cschleiden/go-workflows/internal/common/fn"
@@ -49,6 +50,13 @@ func createSubWorkflowInstance[TResult any](ctx Context, options SubWorkflowOpti
 	if ctx.Err() != nil {
 		f.Set(*new(TResult), ctx.Err())
 		return f
+	}
+
+	if options.Queue != "" {
+		if err := core.ValidQueue(options.Queue); err != nil {
+			f.Set(*new(TResult), fmt.Errorf("invalid queue %q: %w", options.Queue, err))
+			return f
+		}
 	}
 
 	// Check return type
