@@ -59,8 +59,34 @@ The initial schema uses fixed-width `varchar`:
   31) but appears **not called** on the create path — so queue names also rely on the
   DB's 128 limit in practice.
 
-**Potential follow-up (not done):** add a clean length check on `InstanceID` (and wire
-`ValidQueue`) in `client.CreateWorkflowInstance` so oversize values return a friendly
-error instead of a raw SQL failure. Low effort; decide if worth it given your ID
-scheme. Alternatively, widen the columns (e.g. `varchar(256)` or `text`) via a
-migration if long composite IDs are expected.
+**InstanceID follow-up: DONE.** `instance_id`/`parent_instance_id` widened to
+varchar(256) (migration 000003) and `core.ValidateInstanceID` (max 256) is called in
+`client.CreateWorkflowInstance` and `workflow.SpawnWorkflow`. See
+`fix-instance-id-length.md`.
+
+## Deferred schema findings (known, harmless, not yet fixed)
+
+Audit of all column types. None of these are correctness/overflow bugs today; listed
+so they are not lost.
+
+- **`pending_events.sequence_id` is unused (confirmed).** It is written as a
+  placeholder (pending events have no assigned sequence ID) and read into
+  `event.SequenceID`, which the executor then overwrites via `nextSequenceID()`. Only
+  `history.sequence_id` is load-bearing (ordering + `MAX(sequence_id)` replay
+  checkpoint). The column exists only because `insertEvents`/scan SQL is shared between
+  `pending_events` and `history`. Removing it means un-sharing that hot insert/read
+  path — deferred (low value, determinism-adjacent, needs careful testing).
+- **`sequence_id` / `schedule_event_id` are `bigserial`** but hold explicitly-set
+  values, not DB-generated ones. They should be `bigint`; `bigserial` creates unused
+  sequence objects. Cosmetic type smell — deferred.
+- **`parent_schedule_event_id` is `numeric`** while sibling event-id columns are
+  `bigint`/`bigserial`. Inconsistent and heavier than needed. Cosmetic — deferred.
+- **`queue` varchar(128): `core.ValidQueue` exists (caps 31) but is not wired** into
+  the create path. Low risk (queue names are short/static), but wiring it would give a
+  clean error instead of relying on the DB limit.
+- **`worker` varchar(64): user-settable via `WithWorkerName`, unvalidated.** Default
+  `"worker-"+UUID` (43) fits; a custom name > 64 would overflow at the DB. Low risk.
+- **`metadata` / `data` are `bytea`** (unbounded) — no width risk; see the jsonb/gob
+  section above.
+- **`event_type` is `int`** holding a positional enum (1–19); not a width risk but the
+  values must not be reordered (persisted wire format).
