@@ -102,3 +102,39 @@ update `backend/mock_Backend.go`, and add a conformance test in `backend/test`.
   never reorder them.
 - **Verify every change**: `go build ./...`, `go vet ./...`, `go test -short ./...`;
   run `backend/postgres` tests with Postgres up (`docker compose up -d`).
+
+
+## Worker ↔ queue ↔ registry contract (important)
+
+The **queue lives in the backend** (shared, durable); the **registry is per-worker**
+(in-memory). They are decoupled — the engine does **not** enforce that a worker which
+polls a queue has registered the workflows/activities that get routed to that queue.
+
+**Contract (operator's responsibility):** every worker that polls a queue MUST
+register all workflows and activities that can be routed to that queue — including the
+*signatures* of activities/sub-workflows that its workflows merely *schedule* (even if
+a different worker executes them).
+
+**Why it matters:** tasks are claimed from the shared queue via `SELECT ... FOR UPDATE
+SKIP LOCKED`, so **whichever worker's poller wins** runs the task. If that worker's
+registry lacks the entry, you get `"workflow/activity not found"`. This is the cause of
+upstream issue #464 ("sporadic, Postgres-only"): with multiple competing pollers,
+Postgres surfaces an inconsistency that SQLite's serialized access hid. It is **not** a
+backend bug — it is a worker/queue/registry misconfiguration.
+
+**Do:**
+- One worker per queue (or a consistent set), each registering everything for its
+  queue(s). See `samples/queues` — note its comment: *"This worker won't actually
+  execute Activity2, but it still needs to be aware of its signature since the workflow
+  processed by this worker will schedule it."*
+- Complete all registration **before** calling `Start`.
+
+**Don't:**
+- Run two workers on the **same** queue with **different** registrations.
+- Schedule an activity/sub-workflow onto a queue whose worker didn't register it.
+
+**Future enforcement (not yet implemented):** binding registration to queues — i.e.
+registering a workflow/activity *for a specific queue* so the engine can validate at
+`Start` (or warn at dispatch) that a worker serving a queue covers everything routed to
+it. This would turn the current implicit contract into an enforced one. The natural
+home is the **registration** API (`registry` + `worker.Register*`).

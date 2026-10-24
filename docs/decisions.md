@@ -116,3 +116,25 @@ so they are not lost.
   section above.
 - **`event_type` is `int`** holding a positional enum (1–19); not a width risk but the
   values must not be reordered (persisted wire format).
+
+
+## Investigation: #464 "sporadic workflow/activity not found" (Postgres)
+
+**Reproduced** (two workers polling the same queue with separate registries; the
+workflow registered on only one): 20/30 instances failed with "workflow not found" —
+whichever worker won the SKIP LOCKED race ran the task, and the one without the
+registration failed it.
+
+**Root cause: worker↔queue↔registry inconsistency, NOT the Postgres backend.** The
+queue is shared in the backend; the registry is per-worker. The engine doesn't enforce
+that a worker polling a queue has registered what's routed there. Postgres (real
+multi-poller concurrency) exposes the inconsistency SQLite serialized away.
+
+**Done:** documented the contract in `developer-guide.md` (worker must register
+everything for the queues it polls; see `samples/queues`), which already demonstrates
+the correct per-queue pattern.
+
+**Deferred (the real enforcement):** bind registration to queues so the engine can
+validate coverage at `Start` / warn at dispatch. Lives at the registration layer.
+Until then, "not found" is a `PermanentError` — a transient misroute permanently fails
+the workflow; making it retryable (with a cap) is a possible robustness follow-up.
