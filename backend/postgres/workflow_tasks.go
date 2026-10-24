@@ -221,15 +221,36 @@ func (pb *postgresBackend) CompleteWorkflowTask(
 		completedAt = &t
 	}
 
+	// On terminal completion, promote the final result/error onto the instance row for
+	// cheap reads (Phase 1: keep-duplicate; history still carries them). ContinueAsNew
+	// is intentionally skipped — it did not return a result to a caller.
+	var resultJSON, errorJSON []byte
+	if state == core.WorkflowInstanceStateFinished {
+		for _, e := range executedEvents {
+			if e.Type == history.EventType_WorkflowExecutionFinished {
+				a := e.Attributes.(*history.ExecutionCompletedAttributes)
+				resultJSON = a.Result
+				if a.Error != nil {
+					if b, err := json.Marshal(a.Error); err == nil {
+						errorJSON = b
+					}
+				}
+				break
+			}
+		}
+	}
+
 	res, err := tx.ExecContext(
 		ctx,
-		`UPDATE instances SET locked_until = NULL, sticky_until = $1, completed_at = $2, state = $3 WHERE instance_id = $4 AND execution_id = $5 AND worker = $6 AND locked_until IS NOT NULL`,
+		`UPDATE instances SET locked_until = NULL, sticky_until = $1, completed_at = $2, state = $3, result = COALESCE($7, result), error = COALESCE($8, error) WHERE instance_id = $4 AND execution_id = $5 AND worker = $6 AND locked_until IS NOT NULL`,
 		time.Now().Add(pb.options.StickyTimeout),
 		completedAt,
 		state,
 		instance.InstanceID,
 		instance.ExecutionID,
 		pb.workerName,
+		resultJSON,
+		errorJSON,
 	)
 	if err != nil {
 		return fmt.Errorf("unlocking instance: %w", err)
@@ -306,8 +327,13 @@ func (pb *postgresBackend) CompleteWorkflowTask(
 				queue = task.Queue
 			}
 
+			subInputJson, err := json.Marshal(a.Inputs)
+			if err != nil {
+				return fmt.Errorf("marshaling sub-workflow input: %w", err)
+			}
+
 			// Create new instance
-			if err := createInstance(ctx, tx, queue, m.WorkflowInstance, a.Metadata); err != nil {
+			if err := createInstance(ctx, tx, queue, m.WorkflowInstance, a.Metadata, a.Name, subInputJson); err != nil {
 				if errors.Is(err, backend.ErrInstanceAlreadyExists) {
 					if err := insertPendingEvents(ctx, tx, instance, []*history.Event{
 						history.NewPendingEvent(time.Now(), history.EventType_SubWorkflowFailed, &history.SubWorkflowFailedAttributes{

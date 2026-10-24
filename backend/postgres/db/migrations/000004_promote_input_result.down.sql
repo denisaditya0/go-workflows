@@ -1,0 +1,4 @@
+ALTER TABLE instances DROP COLUMN IF EXISTS error;
+ALTER TABLE instances DROP COLUMN IF EXISTS result;
+ALTER TABLE instances DROP COLUMN IF EXISTS input;
+ALTER TABLE instances DROP COLUMN IF EXISTS workflow_name;

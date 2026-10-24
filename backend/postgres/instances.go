@@ -26,8 +26,13 @@ func (pb *postgresBackend) CreateWorkflowInstance(ctx context.Context, instance 
 
 	a := event.Attributes.(*history.ExecutionStartedAttributes)
 
+	inputJson, err := json.Marshal(a.Inputs)
+	if err != nil {
+		return fmt.Errorf("marshaling input: %w", err)
+	}
+
 	// Create workflow instance
-	if err := createInstance(ctx, tx, a.Queue, instance, a.Metadata); err != nil {
+	if err := createInstance(ctx, tx, a.Queue, instance, a.Metadata, a.Name, inputJson); err != nil {
 		return err
 	}
 
@@ -283,7 +288,7 @@ func (pb *postgresBackend) GetWorkflowInstanceState(ctx context.Context, instanc
 	return state, nil
 }
 
-func createInstance(ctx context.Context, tx *sql.Tx, queue workflow.Queue, wfi *workflow.Instance, metadata *workflow.Metadata) error {
+func createInstance(ctx context.Context, tx *sql.Tx, queue workflow.Queue, wfi *workflow.Instance, metadata *workflow.Metadata, name string, input []byte) error {
 	// Check for existing instance
 	err := tx.QueryRowContext(
 		ctx,
@@ -313,7 +318,7 @@ func createInstance(ctx context.Context, tx *sql.Tx, queue workflow.Queue, wfi *
 
 	_, err = tx.ExecContext(
 		ctx,
-		"INSERT INTO instances (queue, instance_id, execution_id, parent_instance_id, parent_execution_id, parent_schedule_event_id, metadata, state) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+		"INSERT INTO instances (queue, instance_id, execution_id, parent_instance_id, parent_execution_id, parent_schedule_event_id, metadata, state, workflow_name, input) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
 		string(queue),
 		wfi.InstanceID,
 		wfi.ExecutionID,
@@ -322,6 +327,8 @@ func createInstance(ctx context.Context, tx *sql.Tx, queue workflow.Queue, wfi *
 		parentEventID,
 		metadataJson,
 		core.WorkflowInstanceStateActive,
+		name,
+		input,
 	)
 	if err != nil {
 		// The partial unique index idx_instances_active_instance_id guarantees at most one
