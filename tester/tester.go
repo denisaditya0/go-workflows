@@ -540,9 +540,17 @@ func (wt *workflowTester[TResult]) fireTimer() bool {
 			// Schedule timer
 			wt.wallClockTimer = wt.wallClock.AfterFunc(remainingTime, func() {
 				wt.callbacks <- func() *history.WorkflowEvent {
-					// Remove timer
-					wt.timers = wt.timers[1:]
 					wt.wallClockTimer = nil
+
+					// The timer may have been cancelled (and removed from wt.timers)
+					// after this wall-clock timer was armed. Only pop if this timer is
+					// still at the head of the queue; otherwise it was cancelled and we
+					// must not fire or shrink an unrelated/empty slice (#494).
+					if len(wt.timers) == 0 || wt.timers[0] != t {
+						return nil
+					}
+
+					wt.timers = wt.timers[1:]
 
 					return t.fire()
 				}
@@ -786,9 +794,12 @@ func (wt *workflowTester[TResult]) scheduleTimer(instance *core.WorkflowInstance
 func (wt *workflowTester[TResult]) cancelTimer(instance *core.WorkflowInstance, event *history.Event) {
 	for i, t := range wt.timers {
 		if t.Instance != nil && t.Instance.InstanceID == instance.InstanceID && t.ScheduleEventID == event.ScheduleEventID {
-			// If this was the next timer to fire, stop the timer
-			if t.wallClockTimer != nil {
-				t.wallClockTimer.Stop()
+			// If this timer is the one currently armed on the wall clock (the head of
+			// the queue), stop the pending wall-clock timer so a stale callback does not
+			// later fire and pop an already-removed entry (#494).
+			if i == 0 && wt.wallClockTimer != nil {
+				wt.wallClockTimer.Stop()
+				wt.wallClockTimer = nil
 			}
 
 			wt.timers = append(wt.timers[:i], wt.timers[i+1:]...)

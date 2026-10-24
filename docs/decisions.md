@@ -138,3 +138,19 @@ the correct per-queue pattern.
 validate coverage at `Start` / warn at dispatch. Lives at the registration layer.
 Until then, "not found" is a `PermanentError` — a transient misroute permanently fails
 the workflow; making it retryable (with a cap) is a possible robustness follow-up.
+
+## Roadmap: deferred improvements (captured, not started)
+
+- **Workflow determinism analysis.** Revive the `analyzer/` package (custom Go
+  analyzer for workflow non-determinism: `time.Now`, `rand`, `map` iteration,
+  goroutines, `select` in workflow code). Per AGENTS.md it is currently
+  disabled/version-incompatible with golangci-lint. Motivation: non-determinism in a
+  workflow makes replay fail, and the symptom is nasty — the worker process stays up
+  and keeps polling, but the affected workflow never advances (task fails to complete
+  on every attempt), so the app silently stalls while looking healthy.
+- **Stuck-workflow visibility (#381).** Add max-workflow-age / stuck detection to stats
+  so a workflow stalled in a replay/non-determinism failure loop is observable
+  (alertable) instead of silently halting.
+- **diag state correctness (#469).** `diag` lists a Failed workflow as "Completed":
+  `GetWorkflowInstances` derives `state=Finished` from `completed_at != nil` without
+  distinguishing failed/canceled. Fix the state derivation in `diag/`.
