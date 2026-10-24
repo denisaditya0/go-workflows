@@ -311,3 +311,24 @@ promote the small, useful head/tail values.
 
 **Reference:** matches how Temporal/River surface a small amount of structured
 head/tail info without forcing a full-history read; payloads themselves stay opaque.
+
+### Phased plan (agreed)
+
+- **Phase 1 — promote + KEEP (duplicate):** add `input`/`result` (+ optional `error`)
+  columns on `instances`, populated at `createInstance` / `CompleteWorkflowTask`. The
+  history blobs are unchanged; the engine keeps replaying from history exactly as
+  today. These columns are a pure fast read path for reports/diag. Low risk, additive,
+  test first. Storage duplication (the two payloads) is the accepted cost.
+- **Phase 2 — remove the duplication (single source of truth):** only after Phase 1 is
+  solid. Strip inputs/result from the history blobs and make all readers source them
+  from the new columns. **CAUTION — this touches replay:**
+  `handleWorkflowExecutionStarted` reads `ExecutionStartedAttributes.Inputs` on every
+  replay to re-invoke the workflow; the completed result flows to parent sub-workflow
+  awaits and `GetWorkflowResult`. Removing them from history means replay/result
+  sourcing must read the columns instead, history is no longer self-contained, and the
+  shared insert/scan path needs event-type-specific handling. Determinism-critical;
+  do with a careful design pass + full replay tests, and keep Phase 1 as the fallback.
+- **Alternative to Phase 2 (no duplication, no redesign):** instead of de-duplicating,
+  make diag/report queries fetch only the start + finish events (by event type) rather
+  than the full history — a query optimization that keeps a single source of truth
+  (the blobs) without new columns. Consider this before committing to Phase 2's risk.
