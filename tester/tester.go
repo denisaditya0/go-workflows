@@ -671,8 +671,6 @@ func (wt *workflowTester[TResult]) scheduleActivity(wfi *core.WorkflowInstance, 
 	atomic.AddInt32(&wt.runningActivities, 1)
 
 	go func() {
-		defer atomic.AddInt32(&wt.runningActivities, -1)
-
 		var activityErr error
 		var activityResult payload.Payload
 
@@ -741,6 +739,12 @@ func (wt *workflowTester[TResult]) scheduleActivity(wfi *core.WorkflowInstance, 
 		}
 
 		wt.callbacks <- func() *history.WorkflowEvent {
+			// Decrement here (on the main loop, synchronized with newTimerMode) rather
+			// than in the goroutine's defer. Otherwise an instantly-completed activity
+			// could still be counted as "running" when newTimerMode runs, wrongly
+			// selecting TM_WallClock and stalling timers (#481).
+			defer atomic.AddInt32(&wt.runningActivities, -1)
+
 			var ne *history.Event
 
 			if activityErr != nil {

@@ -154,3 +154,25 @@ the workflow; making it retryable (with a cap) is a possible robustness follow-u
 - **diag state correctness (#469).** `diag` lists a Failed workflow as "Completed":
   `GetWorkflowInstances` derives `state=Finished` from `completed_at != nil` without
   distinguishing failed/canceled. Fix the state derivation in `diag/`.
+
+## Tester issues #481 and #436
+
+- **#481 (FIXED): race → TM_WallClock for instant mocked activities.** The activity
+  goroutine decremented `runningActivities` in a `defer`, which ran after it had
+  already pushed its completion callback. `newTimerMode` could then read
+  `runningActivities > 0` for an already-finished activity and wrongly pick wall-clock
+  mode, stalling timers until the test timeout ("workflow blocked?"). Fix: decrement
+  `runningActivities` inside the completion callback (which runs on the main loop,
+  synchronized with `newTimerMode`), not in the goroutine defer. Matches the
+  reporter's suggested fix.
+- **#436 (DEFERRED, documented limitation): tester doesn't detect pending ACTIVITY
+  futures on completion.** Reproduced: a workflow that returns while an activity future
+  is pending does NOT surface "workflow completed, but there are still pending
+  futures". Root cause (per maintainer): `ExecuteActivity` spawns an internal retry
+  coroutine that outlives the workflow function's return, so the executor doesn't mark
+  the workflow completed-with-pending-futures until the activity resolves. The
+  maintainer's candidate fix (mark completion on workflow-function exit) breaks several
+  existing tester tests and touches executor completion/determinism semantics — too
+  risky to force. Left as a documented limitation with a skipped test
+  (`Test_PendingActivityFutureOnCompletion`). Note: production behavior is correct (the
+  workflow does eventually complete); this is a test-fidelity gap only.
