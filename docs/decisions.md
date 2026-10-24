@@ -266,3 +266,48 @@ Design decisions to make (borrowed from above):
 - **Phase 2:** overlap policies + catchup window; pause/update as signals.
 - **Phase 3:** leader election for multi-replica (shared with other maintenance
   services).
+
+## Roadmap: denormalize initial input + final result onto `instances`
+
+**Goal:** make a workflow's **initial input** and **final result** readable without
+loading its full event history and decoding every attribute blob. Today a report or
+the diag list must fetch all `history`/`attributes` rows for an instance and decode
+each blob just to find the `WorkflowExecutionStarted` inputs and the
+`WorkflowExecutionFinished` result. Denormalize those two (head + tail) onto the
+`instances` row.
+
+**Scope — common fields only, NOT a full attribute spread.** Do not explode the
+polymorphic per-event attributes into columns (19 event types, sparse/ugly, and the
+payloads are opaque base64-of-JSON anyway — see the payload-nesting note). Only
+promote the small, useful head/tail values.
+
+**Proposed columns on `instances`:**
+- `input bytea NULL` — the start event's `Inputs` (the initial workflow input).
+- `result bytea NULL` — the final result payload (NULL until Finished).
+- `error ...` (optional) — the failure, so failed vs succeeded is distinguishable.
+  This also **fixes #469** (diag showing Failed as "Completed") and lets the UI show
+  the outcome without reading history.
+
+**Write points (already have the values, just copy the payload bytes):**
+- `input`: set in `createInstance` from `ExecutionStartedAttributes.Inputs` (known at
+  create time).
+- `result`/`error`: set in `CompleteWorkflowTask` when state → Finished (from the
+  complete-workflow command / `WorkflowExecutionFinished`).
+- Values are already serialized `payload.Payload` ([]byte), so storing them is a copy,
+  no new encoding. (If jsonb lands later, these could be jsonb for queryability — but
+  note the payload is base64-of-JSON today; see payload-nesting note.)
+
+**Nuances / decisions:**
+- **ContinueAsNew:** each execution gets its own input; a new execution row carries its
+  own `input` — correct per-execution semantics.
+- **Failed workflows:** "result" for a failure is really the error — store `error`
+  separately rather than cramming it into `result`.
+- **Storage cost:** inputs/results are duplicated (also in `attributes`). Deliberate
+  denormalization for read speed; usually fine, note for large payloads.
+- **Core change:** migration (new nullable columns; backfill optional) + write-path
+  edits in `createInstance` and `CompleteWorkflowTask` + a query/diag surface to expose
+  them. Bounded but touches the engine — do with a design pass + tests, and as a new
+  migration (append-only).
+
+**Reference:** matches how Temporal/River surface a small amount of structured
+head/tail info without forcing a full-history read; payloads themselves stay opaque.
