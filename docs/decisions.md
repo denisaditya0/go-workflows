@@ -332,3 +332,54 @@ head/tail info without forcing a full-history read; payloads themselves stay opa
   make diag/report queries fetch only the start + finish events (by event type) rather
   than the full history — a query optimization that keeps a single source of truth
   (the blobs) without new columns. Consider this before committing to Phase 2's risk.
+
+## ContinueAsNew: history scoping, cleaning, and lineage (findings)
+
+How it works today (verified):
+- Each ContinueAsNew creates a **new execution row** (same `instance_id`, new
+  `execution_id`, fresh history). The old execution gets `state=ContinuedAsNew` and
+  `completed_at=now`.
+- `GetWorkflowInstanceHistory` is scoped to **one `(instance_id, execution_id)`** — it
+  does NOT merge history across continuations. There is no "full lineage history" call.
+- **Forward link only:** the OLD execution's `WorkflowExecutionContinuedAsNew` event
+  carries `ContinuedExecutionID` → the next execution. The NEW execution's
+  `WorkflowExecutionStarted` has **no backward pointer** to its predecessor.
+- **Promotion (Phase 1):** `input` + `workflow_name` are populated per execution (each
+  continued execution gets its own input). `result`/`error` are only on the execution
+  that truly `Finished` — ContinuedAsNew executions have `result=null` (they handed off,
+  didn't return). This is correct: a continued execution produced no final result.
+
+With vs. without cleaning (`WithRemoveContinuedAsNewInstances`):
+- **Without (default):** all execution rows + histories retained. Lineage is walkable
+  **forward** via `ContinuedExecutionID` (start at the head, follow to the finished
+  one). diag list shows N rows per continued instance. Storage grows per continuation
+  (until normal retention sweeps by `completed_at`).
+- **With cleaning:** the previous execution (row + history + attributes) is DELETED on
+  each continuation. Only the current/terminal execution survives (keeps its own input,
+  and result if finished). **Lineage is unrecoverable** — the forward links lived in the
+  now-deleted old executions, and the survivor has no backward pointer. Proper for
+  **scheduler/cron-style** workflows (only "now" matters); NOT for cases needing an
+  audit trail.
+
+## Candidate feature: durable backward lineage pointer
+
+**Problem:** continuation lineage is forward-only and stored in the ephemeral old
+executions, so cleaning destroys it and the surviving row can't tell you what it
+continued from.
+
+**Proposal:** record a durable **backward** reference on each continued execution:
+- Add `previous_execution_id varchar NULL` (and/or `original_execution_id`) — set when
+  `createInstance` creates a continued execution (the ContinueAsNew path knows the old
+  execution id). Also carry it on `ExecutionStartedAttributes` so it's in history too.
+- Then, even **with cleaning**, the current row knows its predecessor (or the original
+  head), so lineage/"this is run #k of instance W1" is answerable from the `instances`
+  row alone — no forward-walk, no dependence on retained old executions.
+
+**Pairs with:**
+- The input/result promotion (another promoted column on `instances`).
+- The diag rewrite (render the continuation chain; show "run N of M").
+- Per-state retention (decide lineage retention independently).
+
+**Note:** small, additive (nullable column + one write-path assignment on the
+ContinueAsNew create path + optionally the start attributes). Low risk; a new
+append-only migration.
