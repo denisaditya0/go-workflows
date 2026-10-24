@@ -198,3 +198,71 @@ Scope / notes for later:
   column — so the list shows the correct status from the start.
 - Candidate new features: stuck-workflow view (ties to #381), per-queue dashboards,
   retention/cleanup controls, re-run/terminate actions (ties to #196).
+
+## Roadmap: built-in schedules (durable timer-based cron/interval)
+
+Goal: replace the external cron package in the app worker with scheduling built into
+the engine, using the durable timer (`ScheduleTimer`/`Sleep` → persisted `visible_at`)
+so recurrence survives restarts — no separate cron library.
+
+### Reference designs (how the big engines do it)
+
+**River (closest model — Postgres queue):**
+- `PeriodicJob` with a `schedule`: either `PeriodicInterval(d)` or a cron schedule.
+- Cron is **not built-in** — River reuses `robfig/cron/v3`'s `Schedule` interface
+  (its `PeriodicSchedule` == cron's `Schedule`). So "cron" = plug in `robfig/cron`.
+- `RunOnStart: true` → also enqueue once when a node becomes leader.
+- Periodic insertion is done by the **cluster leader**, which holds the schedule
+  **in memory** → the schedule **resets across restarts/elections** (free tier).
+- **Durable periodic jobs** (run times persisted, guaranteed across restart/election)
+  are **River Pro (paid)**. So DB-backed durability is the paid differentiator.
+- Overlap: combine periodic + **unique jobs** (e.g. a 24h unique interval) so a
+  duplicate isn't enqueued while one is pending — same idea as our SingletonCron
+  dedup.
+
+**Temporal / Cadence (schedules as first-class objects):**
+- A Schedule is a durable server-side object (created once with a cron/interval +
+  target workflow); Cadence runs "a durable internal scheduler workflow that fires
+  your target on each tick, surviving restarts" — i.e. a self-driving workflow, the
+  same pattern available to us.
+- **Overlap policy** (what to do if the previous run is still going): `Skip` (default),
+  `BufferOne`, `BufferAll`, `CancelOther`, `TerminateOther`, `AllowAll`.
+- **Catchup window**: after downtime, which missed ticks to run (bounded) vs skip.
+- Lifecycle: pause/unpause, update, backfill, inspect — without touching workflow code.
+
+### How it maps to this fork (compose existing primitives)
+
+The engine already has the pieces: durable timer (`workflow.Sleep`), `ContinueAsNew`,
+`SpawnWorkflow`, and SingletonCron-style dedup. A scheduler is a **self-rescheduling
+workflow**:
+
+```
+Scheduler(ctx, spec):
+    next := nextFire(spec, workflow.Now(ctx))   // DETERMINISTIC (replay-safe clock!)
+    workflow.Sleep(ctx, next.Sub(workflow.Now(ctx)))
+    spawn/trigger the target workflow (deterministic instance id per tick)
+    workflow.ContinueAsNew(ctx, spec)            // reschedule
+```
+
+Design decisions to make (borrowed from above):
+1. **Schedule type:** start with **interval** (trivial, fully deterministic, no deps);
+   add **cron** via `robfig/cron/v3` (River's exact approach) as step 2.
+2. **Determinism:** `nextFire` must use `workflow.Now(ctx)`, never wall clock. Cron
+   parsing is deterministic; the *next-time* calc must be pinned to the replay clock.
+3. **Overlap policy:** at minimum `Skip` (our SingletonCron dedup already does this via
+   deterministic instance id → duplicate rejected). Consider `BufferOne`/`AllowAll`
+   later.
+4. **Catchup:** decide run-missed-ticks vs skip-to-next after downtime (bounded
+   window), like Temporal's catchupWindow.
+5. **Multi-replica:** needs **leader election** (roadmap prerequisite) so only one
+   scheduler drives recurrence. Single-replica (current) doesn't.
+6. **Durability tier:** our timer is already durable (persisted `visible_at`), so we
+   get "durable periodic" for free — the thing River charges for. Good fork win.
+
+### Plan
+- **Phase 1 (app-layer, no engine change):** a generic `Scheduler` workflow + helper
+  (interval first, then `robfig/cron`), using Sleep + ContinueAsNew + dedup. Replaces
+  the external cron package.
+- **Phase 2:** overlap policies + catchup window; pause/update as signals.
+- **Phase 3:** leader election for multi-replica (shared with other maintenance
+  services).
