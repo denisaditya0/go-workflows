@@ -37,6 +37,27 @@ here):
 **How to get the data:** `bench/` runs real workloads against Postgres and reports
 timings; use it to compare JSON vs gob and bytea vs jsonb before committing to either.
 
+### Fix: int64 precision loss in `any` decode (#471)
+
+`jsonConverter.From` now uses `json.Decoder` with `UseNumber()`. Reproduced bug
+(see `backend/converter/json_test.go`): decoding a large int64 (> 2^53) into an
+`interface{}` target with plain `json.Unmarshal` coerced the number to `float64`,
+losing precision (`9007199254740993` → `9007199254740992`). This affected any
+`any`-typed decode: `GetWorkflowResult[any]`, `ExecuteActivity[any]`, `any` signal
+channels, workflow inputs.
+
+With `UseNumber()`, numbers decoded into `interface{}` become `json.Number` (a
+string) instead of `float64`, preserving full precision. Decoding into a concrete
+numeric type (e.g. `int64`) was always lossless and is unaffected.
+
+**Behavior change / caveat:** code that type-asserts an `any`-decoded number as
+`x.(float64)` will now get a `json.Number` and panic. Callers who need the numeric
+value from an `any` result should use `v.(json.Number).Int64()` / `.Float64()`, or —
+preferred — use the **typed** API (`GetWorkflowResult[int64]`,
+`NewSignalChannel[int64]`), which decodes losslessly and avoids `json.Number`
+entirely. This is why upstream has not merged the change; for this JSON-only fork the
+correctness win is worth it.
+
 ## Schema column limits (varchar) and validation
 
 The initial schema uses fixed-width `varchar`:
