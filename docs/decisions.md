@@ -176,3 +176,25 @@ the workflow; making it retryable (with a cap) is a possible robustness follow-u
   risky to force. Left as a documented limitation with a skipped test
   (`Test_PendingActivityFutureOnCompletion`). Note: production behavior is correct (the
   workflow does eventually complete); this is a test-fidelity gap only.
+
+## Roadmap: rewrite diag as Go html/template (replace embedded React)
+
+Replace the current `diag` UI (a prebuilt React SPA embedded via `//go:embed
+app/build`, served by `diag.NewServeMux` with a JSON `/api/`) with a **server-rendered
+`html/template`** UI. Rationale: we own the fork; Go templates need no npm/React
+toolchain or embedded build step, are easy to extend, and can use richer Postgres
+queries directly.
+
+Scope / notes for later:
+- Keep `diag.Backend` (GetWorkflowInstances / GetWorkflowInstance / GetWorkflowTree /
+  GetStats) as the data source, or extend it with Postgres-native queries for new
+  views (filter by state/queue/age, search metadata once jsonb lands, etc.).
+- Server-render pages (instance list, instance detail + history, sub-workflow tree,
+  stats) with `html/template`; drop `diag/app/` (React source) and the embedded build.
+- **Folds in #469** (Failed workflow shown as "Completed"): the current bug is that
+  `GetWorkflowInstances` derives `state=Finished` from `completed_at != nil` without
+  distinguishing failed/canceled. A rewrite should derive the real outcome (failed vs
+  succeeded vs canceled) — either from the final history event or a dedicated outcome
+  column — so the list shows the correct status from the start.
+- Candidate new features: stuck-workflow view (ties to #381), per-queue dashboards,
+  retention/cleanup controls, re-run/terminate actions (ties to #196).
