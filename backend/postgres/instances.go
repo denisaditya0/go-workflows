@@ -10,6 +10,7 @@ import (
 
 	"github.com/cschleiden/go-workflows/backend"
 	"github.com/cschleiden/go-workflows/backend/history"
+	"github.com/cschleiden/go-workflows/backend/payload"
 	"github.com/cschleiden/go-workflows/core"
 	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -266,6 +267,15 @@ func (pb *postgresBackend) GetWorkflowInstanceHistory(ctx context.Context, insta
 		return nil, historyEvents.Err()
 	}
 
+	// Inject promoted input onto the start event AFTER the result set is fully
+	// consumed — querying on the same tx while rows are still open corrupts the
+	// connection.
+	for _, ev := range h {
+		if err := injectPromotedInput(ctx, tx, instance.InstanceID, instance.ExecutionID, ev); err != nil {
+			return nil, err
+		}
+	}
+
 	return h, nil
 }
 
@@ -357,6 +367,52 @@ func isUniqueViolation(err error) bool {
 		return pgErr.Code == "23505"
 	}
 	return false
+}
+
+// loadPromotedInput reads the promoted instances.input column (JSON-encoded
+// []payload.Payload) for an instance. Phase 2 step 1: the workflow Inputs on a
+// WorkflowExecutionStarted event are sourced from this column instead of the event
+// blob, proving the column as the replay source while the blob still carries them.
+func loadPromotedInput(ctx context.Context, tx *sql.Tx, instanceID, executionID string) ([]payload.Payload, bool, error) {
+	var raw []byte
+	err := tx.QueryRowContext(ctx,
+		"SELECT input FROM instances WHERE instance_id = $1 AND execution_id = $2",
+		instanceID, executionID,
+	).Scan(&raw)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	if len(raw) == 0 {
+		return nil, false, nil
+	}
+	var inputs []payload.Payload
+	if err := json.Unmarshal(raw, &inputs); err != nil {
+		return nil, false, fmt.Errorf("unmarshaling promoted input: %w", err)
+	}
+	return inputs, true, nil
+}
+
+// injectPromotedInput overwrites a WorkflowExecutionStarted event's Inputs with the
+// promoted instances.input column value, if present. No-op for other event types.
+func injectPromotedInput(ctx context.Context, tx *sql.Tx, instanceID, executionID string, event *history.Event) error {
+	if event.Type != history.EventType_WorkflowExecutionStarted {
+		return nil
+	}
+	a, ok := event.Attributes.(*history.ExecutionStartedAttributes)
+	if !ok {
+		return nil
+	}
+	inputs, found, err := loadPromotedInput(ctx, tx, instanceID, executionID)
+	if err != nil {
+		return err
+	}
+	if found {
+		a.Inputs = inputs
+	}
+	return nil
 }
 
 // SignalWorkflow signals a running workflow instance

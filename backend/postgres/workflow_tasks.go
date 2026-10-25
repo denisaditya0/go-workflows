@@ -164,6 +164,15 @@ func (pb *postgresBackend) GetWorkflowTask(ctx context.Context, queues []workflo
 	if events.Err() != nil {
 		return nil, events.Err()
 	}
+	// Close the result set before issuing further queries on this tx.
+	events.Close()
+
+	// Inject promoted input onto the start event after the result set is closed.
+	for _, ev := range t.NewEvents {
+		if err := injectPromotedInput(ctx, tx, instanceID, executionID, ev); err != nil {
+			return nil, err
+		}
+	}
 
 	// Return if there aren't any new events
 	if len(t.NewEvents) == 0 {
