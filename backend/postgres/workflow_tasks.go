@@ -332,8 +332,18 @@ func (pb *postgresBackend) CompleteWorkflowTask(
 				return fmt.Errorf("marshaling sub-workflow input: %w", err)
 			}
 
+			// If the started instance has the SAME instance_id as the one we're
+			// completing, this is a ContinueAsNew continuation (not a sub-workflow,
+			// which would have a different instance_id). Record the predecessor's
+			// execution_id as the backward lineage pointer. Distinct from parent_*
+			// (the sub-workflow relationship), so a continued sub-workflow gets both.
+			var previousExecutionID string
+			if m.WorkflowInstance.InstanceID == instance.InstanceID {
+				previousExecutionID = instance.ExecutionID
+			}
+
 			// Create new instance
-			if err := createInstance(ctx, tx, queue, m.WorkflowInstance, a.Metadata, a.Name, subInputJson); err != nil {
+			if err := createInstance(ctx, tx, queue, m.WorkflowInstance, a.Metadata, a.Name, subInputJson, previousExecutionID); err != nil {
 				if errors.Is(err, backend.ErrInstanceAlreadyExists) {
 					if err := insertPendingEvents(ctx, tx, instance, []*history.Event{
 						history.NewPendingEvent(time.Now(), history.EventType_SubWorkflowFailed, &history.SubWorkflowFailedAttributes{
