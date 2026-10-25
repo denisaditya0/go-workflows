@@ -369,10 +369,12 @@ func (pb *postgresBackend) CompleteWorkflowTask(
 			}
 		}
 
-		// Insert pending events for target instance
+		// Insert pending events for target instance. Inputs for a started instance are
+		// stored in the instances.input column, so strip them from the blob to avoid
+		// duplication (no-op for non-start events).
 		historyEvents := []*history.Event{}
 		for _, m := range events {
-			historyEvents = append(historyEvents, m.HistoryEvent)
+			historyEvents = append(historyEvents, stripStartInputs(m.HistoryEvent))
 		}
 		if err := insertPendingEvents(ctx, tx, &targetInstance, historyEvents); err != nil {
 			return fmt.Errorf("inserting messages: %w", err)

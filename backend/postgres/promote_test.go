@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cschleiden/go-workflows/backend/converter"
+	"github.com/cschleiden/go-workflows/backend/history"
 	"github.com/cschleiden/go-workflows/backend/payload"
 	"github.com/cschleiden/go-workflows/client"
 	"github.com/cschleiden/go-workflows/worker"
@@ -464,5 +465,85 @@ func Test_Promote_InputColumn_ConcurrentLoad(t *testing.T) {
 		if result != s.input*2 {
 			t.Fatalf("instance input=%d: expected %d, got %d", s.input, s.input*2, result)
 		}
+	}
+}
+
+// Test_Promote_InputStrippedFromBlob proves Phase 2 step 2: the persisted
+// WorkflowExecutionStarted attribute blob no longer carries Inputs (they live solely
+// in instances.input), yet the workflow still runs correctly (replay sources inputs
+// from the column) and the instance can still be removed.
+func Test_Promote_InputStrippedFromBlob(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	b, c := newPromoteBackend(t, ctx, func(w *worker.Worker) {
+		if err := w.RegisterWorkflow(promoteWorkflow); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	wfi, err := c.CreateWorkflowInstance(ctx, client.WorkflowInstanceOptions{
+		InstanceID: "strip-" + uuid.NewString(),
+	}, promoteWorkflow, 21)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Result must still be correct (replay sources inputs from the column).
+	result, err := client.GetWorkflowResult[int](ctx, c, wfi, 15*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != 42 {
+		t.Fatalf("expected result 42, got %d", result)
+	}
+
+	// The column must carry the inputs.
+	var colInput []byte
+	if err := b.db.QueryRowContext(ctx,
+		"SELECT input FROM instances WHERE instance_id = $1 AND execution_id = $2",
+		wfi.InstanceID, wfi.ExecutionID,
+	).Scan(&colInput); err != nil {
+		t.Fatal(err)
+	}
+	var colInputs []payload.Payload
+	if err := json.Unmarshal(colInput, &colInputs); err != nil {
+		t.Fatal(err)
+	}
+	if len(colInputs) != 1 {
+		t.Fatalf("expected 1 input in the column, got %d", len(colInputs))
+	}
+
+	// The start-event attribute blob must have EMPTY inputs.
+	// Find the start event's attribute data via the history table.
+	var rawAttrs []byte
+	err = b.db.QueryRowContext(ctx,
+		`SELECT a.data FROM attributes a
+		   JOIN history h ON h.event_id = a.event_id
+		  WHERE h.instance_id = $1 AND h.execution_id = $2 AND h.event_type = $3`,
+		wfi.InstanceID, wfi.ExecutionID, history.EventType_WorkflowExecutionStarted,
+	).Scan(&rawAttrs)
+	if err != nil {
+		t.Fatalf("loading start-event blob: %v", err)
+	}
+	attr, err := history.DeserializeAttributes(history.EventType_WorkflowExecutionStarted, rawAttrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := attr.(*history.ExecutionStartedAttributes)
+	if len(started.Inputs) != 0 {
+		t.Fatalf("expected start-event blob Inputs to be empty (stripped), got %d entries", len(started.Inputs))
+	}
+	// Sanity: other fields survive in the blob.
+	if started.Name == "" {
+		t.Fatalf("expected start-event blob to still carry Name")
+	}
+
+	// Remove must still work for the finished instance.
+	if err := b.RemoveWorkflowInstance(ctx, wfi); err != nil {
+		t.Fatalf("RemoveWorkflowInstance failed: %v", err)
 	}
 }

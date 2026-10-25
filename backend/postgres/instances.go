@@ -37,8 +37,9 @@ func (pb *postgresBackend) CreateWorkflowInstance(ctx context.Context, instance 
 		return err
 	}
 
-	// Initial history is empty, store only new events
-	if err := insertPendingEvents(ctx, tx, instance, []*history.Event{event}); err != nil {
+	// Initial history is empty, store only new events. The inputs now live in the
+	// instances.input column, so strip them from the attribute blob to avoid duplication.
+	if err := insertPendingEvents(ctx, tx, instance, []*history.Event{stripStartInputs(event)}); err != nil {
 		return fmt.Errorf("inserting new event: %w", err)
 	}
 
@@ -413,6 +414,27 @@ func injectPromotedInput(ctx context.Context, tx *sql.Tx, instanceID, executionI
 		a.Inputs = inputs
 	}
 	return nil
+}
+
+// stripStartInputs returns a shallow copy of a WorkflowExecutionStarted event whose
+// ExecutionStartedAttributes.Inputs is nil, so the serialized attribute blob does NOT
+// duplicate the inputs now stored in the instances.input column (Phase 2 step 2). The
+// caller's event is left untouched — only the copy used for the blob insert is stripped.
+// Non-start events are returned unchanged.
+func stripStartInputs(event *history.Event) *history.Event {
+	if event.Type != history.EventType_WorkflowExecutionStarted {
+		return event
+	}
+	a, ok := event.Attributes.(*history.ExecutionStartedAttributes)
+	if !ok || len(a.Inputs) == 0 {
+		return event
+	}
+	attrCopy := *a
+	attrCopy.Inputs = nil
+
+	evCopy := *event
+	evCopy.Attributes = &attrCopy
+	return &evCopy
 }
 
 // SignalWorkflow signals a running workflow instance

@@ -333,6 +333,39 @@ head/tail info without forcing a full-history read; payloads themselves stay opa
   than the full history — a query optimization that keeps a single source of truth
   (the blobs) without new columns. Consider this before committing to Phase 2's risk.
 
+### Phase 2 — IMPLEMENTED for inputs (prove-first, incremental)
+
+Done on `feature-postgres`:
+- **Step 1 — source inputs from the column (blob still written).** `GetWorkflowInstanceHistory`
+  and `GetWorkflowTask` overwrite the `WorkflowExecutionStarted` event's `Inputs` from the
+  `instances.input` column after the result set is consumed (`injectPromotedInput`). The
+  executor is unchanged — it receives a fully-populated `ExecutionStartedAttributes` and
+  cannot tell the source. Proven by a **divergence test** (`Test_Promote_InputSourcedFromColumn`):
+  blob=21, column overwritten to 5, workflow returns 10 — the column is genuinely the source,
+  not a no-op. (An earlier in-loop query on the same tx caused `driver: bad connection`; fixed
+  by injecting after the rows are closed.)
+- **Step 2 — stop writing inputs into the blob (column is the sole copy).** `stripStartInputs`
+  returns a shallow copy of the start event with `Inputs=nil` for serialization only (the
+  caller's event is never mutated). Applied at both write sites: `CreateWorkflowInstance` and
+  the sub-workflow/continuation path in `CompleteWorkflowTask`. Proven by
+  `Test_Promote_InputStrippedFromBlob`: the persisted start-event blob has empty `Inputs`, the
+  column has them, the result is still correct (replay from column), other blob fields (Name)
+  survive, and `RemoveWorkflowInstance` still works. Conformance suite + e2e simple/sub-workflow
+  all green.
+
+**Scope + caveats:**
+- **Inputs only.** The **result** half (for `GetWorkflowResult`/parent sub-workflow awaits) is
+  NOT de-duplicated — results flow from `*Completed` events, a different and murkier path.
+  Still deferred.
+- **History is no longer self-contained for inputs.** A start event loaded *without* going
+  through `GetWorkflowInstanceHistory`/`GetWorkflowTask` (e.g. a future direct reader, external
+  tooling, or an upstream merge that bypasses the injection) will see empty inputs. The
+  `instances.input` column is now the authoritative source; any new start-event reader must
+  source inputs from it.
+- **Partial irreversibility.** Rows written after step 2 cannot recover inputs from the blob
+  (empty there) — only from the column. The divergence test establishes the column is
+  authoritative, so this is acceptable, but there is no blob fallback for new rows.
+
 ## ContinueAsNew: history scoping, cleaning, and lineage (findings)
 
 How it works today (verified):
