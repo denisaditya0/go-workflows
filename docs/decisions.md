@@ -416,3 +416,23 @@ continued from.
 **Note:** small, additive (nullable column + one write-path assignment on the
 ContinueAsNew create path + optionally the start attributes). Low risk; a new
 append-only migration.
+
+## Pre-release: rename the module path (deferred)
+
+The module is still `github.com/cschleiden/go-workflows` (kept for drop-in compatibility
+during development). Before tagging a release, rename it to the fork's own path
+(`github.com/denisaditya0/go-workflows`) so it can be consumed by `go get <fork-url>`
+without a `replace` directive and so the module owns its identity/provenance.
+
+**Why defer until after LISTEN/NOTIFY:** the rename rewrites imports across ~150 files;
+doing it while feature branches are in flight would force every branch to rebase across
+the rename. Do it as the *last* step before the release tag.
+
+**Mechanics when we do it:**
+- Change the `module` line in `go.mod`.
+- Scripted rewrite of every `github.com/cschleiden/go-workflows/...` import across the repo.
+- Update the companion app (`apimicro-testing-worker`) imports.
+- Verify: `go build ./...`, `go vet ./...`, full `backend/postgres` suite.
+
+**Tradeoff being accepted:** renaming breaks the drop-in property (consumers importing the
+old path must update), which is fine for an independently published, tagged module.
