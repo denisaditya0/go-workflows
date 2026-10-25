@@ -3,12 +3,16 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/cschleiden/go-workflows/backend/converter"
+	"github.com/cschleiden/go-workflows/backend/payload"
 	"github.com/cschleiden/go-workflows/client"
 	"github.com/cschleiden/go-workflows/worker"
 	"github.com/cschleiden/go-workflows/workflow"
@@ -326,5 +330,139 @@ func Test_Promote_PreviousExecutionID_FreshAndSub(t *testing.T) {
 	}
 	if !subParent.Valid || subParent.String != wfi.InstanceID {
 		t.Fatalf("sub-workflow parent_instance_id = %v, expected %q", subParent, wfi.InstanceID)
+	}
+}
+
+
+// Test_Promote_InputSourcedFromColumn is the decisive proof for Phase 2 step 1:
+// it makes instances.input DISAGREE with the attributes blob, then checks which
+// value the workflow actually runs with. If the column wins, injection is genuinely
+// the source. (promoteWorkflow returns n*2, so the result reveals the input used.)
+func Test_Promote_InputSourcedFromColumn(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Build the backend WITHOUT starting a worker yet, so we can corrupt the column
+	// before the first GetWorkflowTask reads it.
+	adminDB, err := sql.Open("pgx", fmt.Sprintf("host=localhost port=5432 user=%s password=%s dbname=postgres sslmode=disable", testUser, testPassword))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Close()
+	dbName := "test_diverge_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if _, err := adminDB.Exec("CREATE DATABASE " + dbName); err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Exec("DROP DATABASE IF EXISTS " + dbName + " WITH (FORCE)")
+
+	b := NewPostgresBackend("localhost", 5432, testUser, testPassword, dbName)
+	defer b.db.Close()
+
+	c := client.New(b)
+
+	// Create with blob input = 21 (blob-sourced result would be 42).
+	wfi, err := c.CreateWorkflowInstance(ctx, client.WorkflowInstanceOptions{
+		InstanceID: "diverge-" + uuid.NewString(),
+	}, promoteWorkflow, 21)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Overwrite ONLY the instances.input column with a different valid value: 5.
+	// Column-sourced result would be 10.
+	p5, err := converter.DefaultConverter.To(5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	colInput, err := json.Marshal([]payload.Payload{p5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.db.ExecContext(ctx,
+		"UPDATE instances SET input = $1 WHERE instance_id = $2 AND execution_id = $3",
+		colInput, wfi.InstanceID, wfi.ExecutionID,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	// NOW start the worker so the first task read sees the corrupted column.
+	w := worker.New(b, nil)
+	if err := w.RegisterWorkflow(promoteWorkflow); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := client.GetWorkflowResult[int](ctx, c, wfi, 15*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 10 => column was the source (PROVEN). 42 => blob was the source (injection is a no-op).
+	if result != 10 {
+		t.Fatalf("expected result 10 (input from column=5), got %d — input was NOT sourced from the column", result)
+	}
+}
+
+// Test_Promote_InputColumn_ConcurrentLoad is the robustness backstop: many workflows
+// with distinct inputs run concurrently through real workers; all must complete with
+// the correct per-instance result. Exercises the modified GetWorkflowTask read path
+// under concurrency (guards against connection/race regressions like the earlier
+// "bad connection" bug).
+func Test_Promote_InputColumn_ConcurrentLoad(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, c := newPromoteBackend(t, ctx, func(w *worker.Worker) {
+		if err := w.RegisterWorkflow(promoteWorkflow); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	const n = 40
+	type started struct {
+		wfi   *workflow.Instance
+		input int
+	}
+	starts := make([]started, 0, n)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			wfi, err := c.CreateWorkflowInstance(ctx, client.WorkflowInstanceOptions{
+				InstanceID: fmt.Sprintf("load-%d-%s", i, uuid.NewString()),
+			}, promoteWorkflow, i)
+			if err != nil {
+				t.Errorf("create %d: %v", i, err)
+				return
+			}
+			mu.Lock()
+			starts = append(starts, started{wfi, i})
+			mu.Unlock()
+		}(i)
+	}
+	wg.Wait()
+
+	if len(starts) != n {
+		t.Fatalf("expected %d started, got %d", n, len(starts))
+	}
+
+	for _, s := range starts {
+		result, err := client.GetWorkflowResult[int](ctx, c, s.wfi, 30*time.Second)
+		if err != nil {
+			t.Fatalf("instance input=%d: %v", s.input, err)
+		}
+		if result != s.input*2 {
+			t.Fatalf("instance input=%d: expected %d, got %d", s.input, s.input*2, result)
+		}
 	}
 }
