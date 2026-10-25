@@ -1,16 +1,52 @@
-# Durable workflows using Go
+# Durable workflows using Go — PostgreSQL-centric fork
 
-[![Build & Test](https://github.com/cschleiden/go-workflows/actions/workflows/go.yml/badge.svg?branch=main)](https://github.com/cschleiden/go-workflows/actions/workflows/go.yml)
+> **Fork notice.** This is a PostgreSQL-specialized fork of
+> [`cschleiden/go-workflows`](https://github.com/cschleiden/go-workflows). The module path is
+> unchanged (`github.com/cschleiden/go-workflows`) and the public workflow/activity API stays
+> compatible with upstream, but the backend story is different: **PostgreSQL is the only backend**,
+> and the storage layer has been extended with Postgres-specific features. See
+> [What's different](#whats-different-from-upstream) below.
 
 Borrows heavily from [Temporal](https://github.com/temporalio/temporal) (and since it's a fork also [Cadence](https://github.com/uber/cadence)) as well as [DTFx](https://github.com/Azure/durabletask).
 
-See also:
+Upstream background reading:
 - https://cschleiden.dev/blog/2022-02-13-go-workflows-part1/
 - https://cschleiden.dev/blog/2022-05-02-go-workflows-part2/
 
+## What's different from upstream
+
+This fork trades upstream's multi-backend flexibility for a single, well-understood,
+feature-rich PostgreSQL backend.
+
+- **PostgreSQL only.** The SQLite, MySQL, Redis, and in-memory/monoprocess backends have been
+  removed. There is one backend: `backend/postgres`. This keeps the storage layer focused and
+  lets it use Postgres-specific features without a lowest-common-denominator abstraction.
+- **Denormalized query columns on `instances`.** `workflow_name`, `input`, `result`, and `error`
+  are promoted onto the `instances` row so common queries (lists, dashboards, result lookups)
+  don't have to load and decode the full history blob. Workflow **inputs** are stored *solely* in
+  the `input` column — the start-event history blob no longer duplicates them (replay sources
+  inputs from the column).
+- **ContinueAsNew lineage.** A `previous_execution_id` column records the predecessor execution of
+  a continued workflow — a durable backward pointer, distinct from the `parent_*` sub-workflow link.
+- **Duplicate-active-instance protection.** A partial unique index plus conflict-aware inserts
+  prevent two *active* executions sharing one instance ID, while still allowing an ID to be reused
+  once the prior run has finished (upstream #489).
+- **Stricter validation.** Queue names and instance IDs are validated on create/register/spawn
+  paths; `instance_id` is widened to `varchar(256)`.
+- **Schema isolation.** `WithSchema(...)` runs the engine (migrations and all) inside a
+  non-`public` Postgres schema.
+- **Correctness fixes carried from upstream issues.** int64 precision on `any`-typed decode
+  (#471) and tester timer/race fixes (#494, #481).
+
+For the full design rationale, roadmap, and the explicit caveats behind these decisions, see
+[`docs/decisions.md`](docs/decisions.md), [`docs/architecture.md`](docs/architecture.md), and
+[`docs/developer-guide.md`](docs/developer-guide.md).
+
 ## Docs
 
-See http://cschleiden.github.io/go-workflows for the current version of the documentation.
+Upstream documentation (API, guide, patterns) applies to the workflow/activity programming model:
+http://cschleiden.github.io/go-workflows. Backend-specific behavior for this fork is documented in
+the `docs/` directory of this repository.
 
 ## Simple example
 
