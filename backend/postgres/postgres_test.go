@@ -417,3 +417,173 @@ func Test_PostgresBackend_ConcurrentCreate(t *testing.T) {
 		t.Fatalf("expected exactly 1 active instance row, got %d", activeCount)
 	}
 }
+
+// Test_PostgresBackend_WithSchema verifies that WithSchema targets a non-public
+// Postgres schema: the schema is created, migrations run in it, and the tables
+// (e.g. instances) exist in that schema.
+func Test_PostgresBackend_WithSchema(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	adminDB, err := sql.Open("pgx", fmt.Sprintf("host=localhost port=5432 user=%s password=%s dbname=postgres sslmode=disable", testUser, testPassword))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Close()
+
+	dbName := "test_schema_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if _, err := adminDB.Exec("CREATE DATABASE " + dbName); err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Exec("DROP DATABASE IF EXISTS " + dbName + " WITH (FORCE)")
+
+	const schema = "wf_test"
+	b := NewPostgresBackend("localhost", 5432, testUser, testPassword, dbName, WithSchema(schema))
+	defer b.db.Close()
+
+	ctx := context.Background()
+
+	// instances table must exist in the configured schema, not public.
+	var count int
+	if err := b.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'instances'",
+		schema,
+	).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 'instances' table in schema %q, found %d", schema, count)
+	}
+
+	// And it must NOT be in public.
+	if err := b.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'instances'",
+	).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("did not expect 'instances' in public schema, found %d", count)
+	}
+
+	// The backend must be usable against the schema (search_path pinned): create an instance.
+	instanceID := "schema-" + uuid.NewString()
+	if err := b.CreateWorkflowInstance(ctx,
+		core.NewWorkflowInstance(instanceID, uuid.NewString()),
+		history.NewHistoryEvent(1, time.Now(), history.EventType_WorkflowExecutionStarted, &history.ExecutionStartedAttributes{
+			Queue: workflow.QueueDefault,
+		}),
+	); err != nil {
+		t.Fatalf("creating instance against schema %q failed: %v", schema, err)
+	}
+}
+
+// Test_PostgresBackend_ReuseInstanceIDAfterCompletion verifies the partial unique
+// index allows reusing an instance_id once the previous run is no longer active.
+func Test_PostgresBackend_ReuseInstanceIDAfterCompletion(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	adminDB, err := sql.Open("pgx", fmt.Sprintf("host=localhost port=5432 user=%s password=%s dbname=postgres sslmode=disable", testUser, testPassword))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Close()
+
+	dbName := "test_reuse_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if _, err := adminDB.Exec("CREATE DATABASE " + dbName); err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Exec("DROP DATABASE IF EXISTS " + dbName + " WITH (FORCE)")
+
+	b := NewPostgresBackend("localhost", 5432, testUser, testPassword, dbName)
+	defer b.db.Close()
+
+	ctx := context.Background()
+	instanceID := "reuse-" + uuid.NewString()
+
+	startEvent := func() *history.Event {
+		return history.NewHistoryEvent(1, time.Now(), history.EventType_WorkflowExecutionStarted, &history.ExecutionStartedAttributes{
+			Queue: workflow.QueueDefault,
+		})
+	}
+
+	// First active instance.
+	inst1 := core.NewWorkflowInstance(instanceID, uuid.NewString())
+	if err := b.CreateWorkflowInstance(ctx, inst1, startEvent()); err != nil {
+		t.Fatal(err)
+	}
+
+	// A second create while the first is active must be rejected.
+	inst2 := core.NewWorkflowInstance(instanceID, uuid.NewString())
+	if err := b.CreateWorkflowInstance(ctx, inst2, startEvent()); !errors.Is(err, backend.ErrInstanceAlreadyExists) {
+		t.Fatalf("expected ErrInstanceAlreadyExists for active duplicate, got %v", err)
+	}
+
+	// Mark the first instance as finished directly, then remove it.
+	if _, err := b.db.ExecContext(ctx,
+		"UPDATE instances SET state = $1, completed_at = now() WHERE instance_id = $2 AND execution_id = $3",
+		core.WorkflowInstanceStateFinished, inst1.InstanceID, inst1.ExecutionID,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	// Now reusing the same instance_id for a new run must succeed (partial index only
+	// guards active rows).
+	inst3 := core.NewWorkflowInstance(instanceID, uuid.NewString())
+	if err := b.CreateWorkflowInstance(ctx, inst3, startEvent()); err != nil {
+		t.Fatalf("expected reuse after completion to succeed, got %v", err)
+	}
+}
+
+// Test_PostgresBackend_LongInstanceID verifies an instance_id near the widened
+// varchar(256) limit round-trips (migration 000003).
+func Test_PostgresBackend_LongInstanceID(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	adminDB, err := sql.Open("pgx", fmt.Sprintf("host=localhost port=5432 user=%s password=%s dbname=postgres sslmode=disable", testUser, testPassword))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Close()
+
+	dbName := "test_longid_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if _, err := adminDB.Exec("CREATE DATABASE " + dbName); err != nil {
+		t.Fatal(err)
+	}
+	defer adminDB.Exec("DROP DATABASE IF EXISTS " + dbName + " WITH (FORCE)")
+
+	b := NewPostgresBackend("localhost", 5432, testUser, testPassword, dbName)
+	defer b.db.Close()
+
+	ctx := context.Background()
+
+	// 200-char composite-style id (well under 256, over the old 128).
+	instanceID := "order-" + strings.Repeat("x", 194)
+	if len(instanceID) != 200 {
+		t.Fatalf("test setup: expected 200-char id, got %d", len(instanceID))
+	}
+
+	if err := b.CreateWorkflowInstance(ctx,
+		core.NewWorkflowInstance(instanceID, uuid.NewString()),
+		history.NewHistoryEvent(1, time.Now(), history.EventType_WorkflowExecutionStarted, &history.ExecutionStartedAttributes{
+			Queue: workflow.QueueDefault,
+		}),
+	); err != nil {
+		t.Fatalf("creating instance with 200-char id failed: %v", err)
+	}
+
+	var got string
+	if err := b.db.QueryRowContext(ctx,
+		"SELECT instance_id FROM instances WHERE instance_id = $1",
+		instanceID,
+	).Scan(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got != instanceID {
+		t.Fatalf("instance_id round-trip mismatch: len(got)=%d, len(want)=%d", len(got), len(instanceID))
+	}
+}
