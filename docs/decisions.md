@@ -354,17 +354,29 @@ Done on `feature-postgres`:
   all green.
 
 **Scope + caveats:**
-- **Inputs only.** The **result** half (for `GetWorkflowResult`/parent sub-workflow awaits) is
-  NOT de-duplicated — results flow from `*Completed` events, a different and murkier path.
-  Still deferred.
-- **History is no longer self-contained for inputs.** A start event loaded *without* going
-  through `GetWorkflowInstanceHistory`/`GetWorkflowTask` (e.g. a future direct reader, external
-  tooling, or an upstream merge that bypasses the injection) will see empty inputs. The
-  `instances.input` column is now the authoritative source; any new start-event reader must
-  source inputs from it.
-- **Partial irreversibility.** Rows written after step 2 cannot recover inputs from the blob
-  (empty there) — only from the column. The divergence test establishes the column is
-  authoritative, so this is acceptable, but there is no blob fallback for new rows.
+- **Terminal result + error de-duplicated (DONE).** The `WorkflowExecutionFinished` event's
+  `Result`/`Error` are sourced from `instances.result`/`instances.error` on read
+  (`injectPromotedResult` in `GetWorkflowInstanceHistory`/`GetWorkflowTask`) and stripped from
+  the blob on write (`stripFinishedResult` before `insertHistoryEvents`, after the column
+  UPDATE). Replay-safe because the executor **ignores** `WorkflowExecutionFinished`
+  (`executor.go` — no handler), so only reader paths (`GetWorkflowResult`, diag) consume it, and
+  they go through the injecting read path. Proven: result divergence (column=99 vs blob=42 →
+  `GetWorkflowResult` returns 99), result/error blob-stripped tests, failed-workflow error
+  round-trip (via `workflowerrors.Error` JSON), and sub-workflow result still reaches the parent.
+- **`SubWorkflowCompleted`/`SubWorkflowFailed` are intentionally OUT OF SCOPE.** Those are
+  inter-workflow *delivery messages* to the parent (read by the parent's replay via
+  `handleSubWorkflowCompleted`), not duplicates of the child's terminal event. De-duplicating
+  them would cross instance boundaries and touch determinism-critical parent replay — not worth
+  the risk. The child's result bytes live in the child's `instances.result` column AND in the
+  parent-bound message; that is correct, not redundant.
+- **History is no longer self-contained for inputs or terminal result/error.** A start or
+  finished event loaded *without* going through `GetWorkflowInstanceHistory`/`GetWorkflowTask`
+  (a future direct reader, external tooling, or an upstream merge that bypasses the injection)
+  will see empty inputs/result/error. The `instances` columns are now authoritative; any new
+  reader of those two events must source from the columns.
+- **Partial irreversibility.** Rows written after this change cannot recover inputs/result/error
+  from the blob (empty there) — only from the columns. The divergence tests establish the columns
+  are authoritative, so this is acceptable, but there is no blob fallback for new rows.
 
 ## ContinueAsNew: history scoping, cleaning, and lineage (findings)
 

@@ -12,6 +12,7 @@ import (
 	"github.com/cschleiden/go-workflows/backend/history"
 	"github.com/cschleiden/go-workflows/backend/payload"
 	"github.com/cschleiden/go-workflows/core"
+	"github.com/cschleiden/go-workflows/internal/workflowerrors"
 	"github.com/cschleiden/go-workflows/workflow"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -268,11 +269,14 @@ func (pb *postgresBackend) GetWorkflowInstanceHistory(ctx context.Context, insta
 		return nil, historyEvents.Err()
 	}
 
-	// Inject promoted input onto the start event AFTER the result set is fully
-	// consumed — querying on the same tx while rows are still open corrupts the
+	// Inject promoted input/result onto the start/finished events AFTER the result set
+	// is fully consumed — querying on the same tx while rows are still open corrupts the
 	// connection.
 	for _, ev := range h {
 		if err := injectPromotedInput(ctx, tx, instance.InstanceID, instance.ExecutionID, ev); err != nil {
+			return nil, err
+		}
+		if err := injectPromotedResult(ctx, tx, instance.InstanceID, instance.ExecutionID, ev); err != nil {
 			return nil, err
 		}
 	}
@@ -416,6 +420,58 @@ func injectPromotedInput(ctx context.Context, tx *sql.Tx, instanceID, executionI
 	return nil
 }
 
+// loadPromotedResult reads the promoted instances.result and instances.error columns
+// for an instance. result is the raw final result payload bytes; errorJSON is the
+// JSON-encoded *workflowerrors.Error (or empty). Phase 2 (result): the terminal
+// WorkflowExecutionFinished event's Result/Error are sourced from these columns.
+func loadPromotedResult(ctx context.Context, tx *sql.Tx, instanceID, executionID string) (result []byte, errorJSON []byte, found bool, err error) {
+	var resRaw, errRaw []byte
+	err = tx.QueryRowContext(ctx,
+		"SELECT result, error FROM instances WHERE instance_id = $1 AND execution_id = $2",
+		instanceID, executionID,
+	).Scan(&resRaw, &errRaw)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, false, nil
+		}
+		return nil, nil, false, err
+	}
+	return resRaw, errRaw, true, nil
+}
+
+// injectPromotedResult overwrites a WorkflowExecutionFinished event's Result/Error from
+// the promoted instances.result/error columns. No-op for other event types. The
+// executor ignores this event on replay, so this only affects reader paths
+// (GetWorkflowResult, diag). SubWorkflowCompleted/Failed are intentionally NOT touched —
+// those are parent-delivery messages, not duplicates of this terminal event.
+func injectPromotedResult(ctx context.Context, tx *sql.Tx, instanceID, executionID string, event *history.Event) error {
+	if event.Type != history.EventType_WorkflowExecutionFinished {
+		return nil
+	}
+	a, ok := event.Attributes.(*history.ExecutionCompletedAttributes)
+	if !ok {
+		return nil
+	}
+	result, errorJSON, found, err := loadPromotedResult(ctx, tx, instanceID, executionID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil
+	}
+	if len(result) > 0 {
+		a.Result = result
+	}
+	if len(errorJSON) > 0 {
+		var werr workflowerrors.Error
+		if err := json.Unmarshal(errorJSON, &werr); err != nil {
+			return fmt.Errorf("unmarshaling promoted error: %w", err)
+		}
+		a.Error = &werr
+	}
+	return nil
+}
+
 // stripStartInputs returns a shallow copy of a WorkflowExecutionStarted event whose
 // ExecutionStartedAttributes.Inputs is nil, so the serialized attribute blob does NOT
 // duplicate the inputs now stored in the instances.input column (Phase 2 step 2). The
@@ -431,6 +487,29 @@ func stripStartInputs(event *history.Event) *history.Event {
 	}
 	attrCopy := *a
 	attrCopy.Inputs = nil
+
+	evCopy := *event
+	evCopy.Attributes = &attrCopy
+	return &evCopy
+}
+
+// stripFinishedResult returns a shallow copy of a WorkflowExecutionFinished event whose
+// ExecutionCompletedAttributes.Result/Error are cleared, so the serialized attribute
+// blob does NOT duplicate the result/error now stored in the instances.result/error
+// columns (Phase 2, result). The caller's event is left untouched. Non-finished events
+// (and SubWorkflowCompleted/Failed, which are separate parent-delivery messages) are
+// returned unchanged.
+func stripFinishedResult(event *history.Event) *history.Event {
+	if event.Type != history.EventType_WorkflowExecutionFinished {
+		return event
+	}
+	a, ok := event.Attributes.(*history.ExecutionCompletedAttributes)
+	if !ok || (len(a.Result) == 0 && a.Error == nil) {
+		return event
+	}
+	attrCopy := *a
+	attrCopy.Result = nil
+	attrCopy.Error = nil
 
 	evCopy := *event
 	evCopy.Attributes = &attrCopy

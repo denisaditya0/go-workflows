@@ -547,3 +547,202 @@ func Test_Promote_InputStrippedFromBlob(t *testing.T) {
 		t.Fatalf("RemoveWorkflowInstance failed: %v", err)
 	}
 }
+
+// Test_Promote_ResultSourcedFromColumn proves the terminal result is sourced from the
+// instances.result column: after the workflow finishes, corrupt ONLY the column and
+// assert GetWorkflowResult returns the column's value (not the blob's).
+func Test_Promote_ResultSourcedFromColumn(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	b, c := newPromoteBackend(t, ctx, func(w *worker.Worker) {
+		if err := w.RegisterWorkflow(promoteWorkflow); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	wfi, err := c.CreateWorkflowInstance(ctx, client.WorkflowInstanceOptions{
+		InstanceID: "res-" + uuid.NewString(),
+	}, promoteWorkflow, 21)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Finishes with 42.
+	if _, err := client.GetWorkflowResult[int](ctx, c, wfi, 15*time.Second); err != nil {
+		t.Fatal(err)
+	}
+
+	// Corrupt ONLY the result column to encode 99.
+	p99, err := converter.DefaultConverter.To(99)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.db.ExecContext(ctx,
+		"UPDATE instances SET result = $1 WHERE instance_id = $2 AND execution_id = $3",
+		[]byte(p99), wfi.InstanceID, wfi.ExecutionID,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	// GetWorkflowResult re-reads history; result must come from the column (99), not the blob (42).
+	got, err := client.GetWorkflowResult[int](ctx, c, wfi, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 99 {
+		t.Fatalf("expected result 99 (from column), got %d — result was NOT sourced from the column", got)
+	}
+}
+
+// Test_Promote_ResultStrippedFromBlob proves the persisted WorkflowExecutionFinished
+// blob no longer carries Result, yet GetWorkflowResult still returns it (from the column).
+func Test_Promote_ResultStrippedFromBlob(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	b, c := newPromoteBackend(t, ctx, func(w *worker.Worker) {
+		if err := w.RegisterWorkflow(promoteWorkflow); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	wfi, err := c.CreateWorkflowInstance(ctx, client.WorkflowInstanceOptions{
+		InstanceID: "resstrip-" + uuid.NewString(),
+	}, promoteWorkflow, 21)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := client.GetWorkflowResult[int](ctx, c, wfi, 15*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != 42 {
+		t.Fatalf("expected 42, got %d", result)
+	}
+
+	// The persisted finished-event blob must have empty Result + nil Error.
+	var rawAttrs []byte
+	if err := b.db.QueryRowContext(ctx,
+		`SELECT a.data FROM attributes a
+		   JOIN history h ON h.event_id = a.event_id
+		  WHERE h.instance_id = $1 AND h.execution_id = $2 AND h.event_type = $3`,
+		wfi.InstanceID, wfi.ExecutionID, history.EventType_WorkflowExecutionFinished,
+	).Scan(&rawAttrs); err != nil {
+		t.Fatalf("loading finished-event blob: %v", err)
+	}
+	attr, err := history.DeserializeAttributes(history.EventType_WorkflowExecutionFinished, rawAttrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fin := attr.(*history.ExecutionCompletedAttributes)
+	if len(fin.Result) != 0 {
+		t.Fatalf("expected finished-event blob Result to be empty (stripped), got %d bytes", len(fin.Result))
+	}
+	if fin.Error != nil {
+		t.Fatalf("expected finished-event blob Error to be nil, got %v", fin.Error)
+	}
+}
+
+// Test_Promote_ErrorStrippedFromBlob proves a failed workflow's error is sourced from
+// the instances.error column and stripped from the blob, and GetWorkflowResult still
+// surfaces the error.
+func Test_Promote_ErrorStrippedFromBlob(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	b, c := newPromoteBackend(t, ctx, func(w *worker.Worker) {
+		if err := w.RegisterWorkflow(promoteFailWorkflow); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	wfi, err := c.CreateWorkflowInstance(ctx, client.WorkflowInstanceOptions{
+		InstanceID: "errstrip-" + uuid.NewString(),
+	}, promoteFailWorkflow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Workflow fails; GetWorkflowResult must surface the error (sourced from the column).
+	_, err = client.GetWorkflowResult[int](ctx, c, wfi, 15*time.Second)
+	if err == nil {
+		t.Fatal("expected an error from the failed workflow")
+	}
+	if !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("expected error to contain 'boom', got %v", err)
+	}
+
+	// The error column must be populated.
+	var errCol []byte
+	if err := b.db.QueryRowContext(ctx,
+		"SELECT error FROM instances WHERE instance_id = $1 AND execution_id = $2",
+		wfi.InstanceID, wfi.ExecutionID,
+	).Scan(&errCol); err != nil {
+		t.Fatal(err)
+	}
+	if len(errCol) == 0 {
+		t.Fatal("expected error column populated for failed workflow")
+	}
+
+	// The finished-event blob must have nil Error (stripped).
+	var rawAttrs []byte
+	if err := b.db.QueryRowContext(ctx,
+		`SELECT a.data FROM attributes a
+		   JOIN history h ON h.event_id = a.event_id
+		  WHERE h.instance_id = $1 AND h.execution_id = $2 AND h.event_type = $3`,
+		wfi.InstanceID, wfi.ExecutionID, history.EventType_WorkflowExecutionFinished,
+	).Scan(&rawAttrs); err != nil {
+		t.Fatalf("loading finished-event blob: %v", err)
+	}
+	attr, err := history.DeserializeAttributes(history.EventType_WorkflowExecutionFinished, rawAttrs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fin := attr.(*history.ExecutionCompletedAttributes)
+	if fin.Error != nil {
+		t.Fatalf("expected finished-event blob Error stripped, got %v", fin.Error)
+	}
+}
+
+// Test_Promote_SubWorkflowResultIntact proves the sub-workflow result delivery to the
+// parent (SubWorkflowCompleted messaging) is NOT affected by terminal-result stripping:
+// the parent still receives the child's result.
+func Test_Promote_SubWorkflowResultIntact(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, c := newPromoteBackend(t, ctx, func(w *worker.Worker) {
+		if err := w.RegisterWorkflow(promoteSubParent); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.RegisterWorkflow(promoteSubChild); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	wfi, err := c.CreateWorkflowInstance(ctx, client.WorkflowInstanceOptions{
+		InstanceID: "subres-" + uuid.NewString(),
+	}, promoteSubParent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Parent returns the child's result (7); proves SubWorkflowCompleted messaging still carries it.
+	got, err := client.GetWorkflowResult[int](ctx, c, wfi, 15*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 7 {
+		t.Fatalf("expected sub-workflow result 7 to reach the parent, got %d", got)
+	}
+}

@@ -167,9 +167,12 @@ func (pb *postgresBackend) GetWorkflowTask(ctx context.Context, queues []workflo
 	// Close the result set before issuing further queries on this tx.
 	events.Close()
 
-	// Inject promoted input onto the start event after the result set is closed.
+	// Inject promoted input/result onto the start/finished events after the result set is closed.
 	for _, ev := range t.NewEvents {
 		if err := injectPromotedInput(ctx, tx, instanceID, executionID, ev); err != nil {
+			return nil, err
+		}
+		if err := injectPromotedResult(ctx, tx, instanceID, executionID, ev); err != nil {
 			return nil, err
 		}
 	}
@@ -289,8 +292,15 @@ func (pb *postgresBackend) CompleteWorkflowTask(
 		}
 	}
 
-	// Insert new events generated during this workflow execution to the history
-	if err := insertHistoryEvents(ctx, tx, instance, executedEvents); err != nil {
+	// Insert new events generated during this workflow execution to the history. The
+	// terminal result/error now live in the instances.result/error columns, so strip
+	// them from the WorkflowExecutionFinished blob to avoid duplication (no-op for other
+	// events; SubWorkflowCompleted/Failed to the parent are left intact).
+	historyToInsert := make([]*history.Event, len(executedEvents))
+	for i, e := range executedEvents {
+		historyToInsert[i] = stripFinishedResult(e)
+	}
+	if err := insertHistoryEvents(ctx, tx, instance, historyToInsert); err != nil {
 		return fmt.Errorf("inserting new history events: %w", err)
 	}
 
