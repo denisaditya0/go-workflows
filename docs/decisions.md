@@ -179,6 +179,10 @@ the workflow; making it retryable (with a cap) is a possible robustness follow-u
 
 ## Roadmap: rewrite diag as Go html/template (replace embedded React)
 
+**Status: done.** The React SPA (`diag/app/`) and its embedded build have been
+removed. The diagnostics UI is served by `diag/templ.NewServeMux`, and
+`diag.NewServeMux` now exposes only the JSON API under `/api/`.
+
 Replace the current `diag` UI (a prebuilt React SPA embedded via `//go:embed
 app/build`, served by `diag.NewServeMux` with a JSON `/api/`) with a **server-rendered
 `html/template`** UI. Rationale: we own the fork; Go templates need no npm/React

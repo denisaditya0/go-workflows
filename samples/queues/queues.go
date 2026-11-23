@@ -12,6 +12,7 @@ import (
 	"github.com/cschleiden/go-workflows/backend"
 	"github.com/cschleiden/go-workflows/client"
 	"github.com/cschleiden/go-workflows/diag"
+	diagtempl "github.com/cschleiden/go-workflows/diag/templ"
 	"github.com/cschleiden/go-workflows/samples"
 	"github.com/cschleiden/go-workflows/worker"
 	"github.com/cschleiden/go-workflows/workflow"
@@ -36,7 +37,7 @@ func main() {
 
 	// Start diagnostic server under /diag
 	m := http.NewServeMux()
-	m.Handle("/diag/", http.StripPrefix("/diag", diag.NewServeMux(db)))
+	m.Handle("/diag/", http.StripPrefix("/diag", diagtempl.NewServeMux(db)))
 	go func() {
 		if err := http.ListenAndServe(":3000", m); err != nil {
 			panic(err)

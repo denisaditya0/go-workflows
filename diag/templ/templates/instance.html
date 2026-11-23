@@ -1,0 +1,123 @@
+{{define "content"}}
+  <p><a href="{{.BasePath}}/">&larr; All instances</a></p>
+
+  <h2 class="h4">Workflow: <code>{{if .WorkflowName}}{{.WorkflowName}}{{else}}Pending{{end}}</code></h2>
+
+  <dl class="row">
+    <dt class="col-sm-3">InstanceID</dt>
+    <dd class="col-sm-9"><code>{{.Info.Instance.InstanceID}}</code></dd>
+
+    <dt class="col-sm-3">ExecutionID</dt>
+    <dd class="col-sm-9"><code>{{.Info.Instance.ExecutionID}}</code></dd>
+
+    {{with .Info.PreviousExecutionID}}
+    <dt class="col-sm-3">Previous ExecutionID</dt>
+    <dd class="col-sm-9">
+      <a href="{{instanceLink $.BasePath $.Info.Instance.InstanceID .}}"><code>{{.}}</code></a>
+      <span class="text-muted small">(continued-as-new predecessor)</span>
+    </dd>
+    {{end}}
+
+    {{with .Info.Instance.Parent}}
+    <dt class="col-sm-3">Parent InstanceID</dt>
+    <dd class="col-sm-9">
+      <a href="{{instanceLink $.BasePath .InstanceID .ExecutionID}}"><code>{{.InstanceID}}</code></a>
+    </dd>
+    {{end}}
+
+    <dt class="col-sm-3">State</dt>
+    <dd class="col-sm-9">{{template "stateBadge" stateBadge .Info.State .HasError}}</dd>
+
+    <dt class="col-sm-3">Created at</dt>
+    <dd class="col-sm-9">{{fmtTime .Info.CreatedAt}}</dd>
+
+    <dt class="col-sm-3">Completed at</dt>
+    <dd class="col-sm-9">{{if .Info.CompletedAt}}{{fmtTimePtr .Info.CompletedAt}}{{else}}<i>pending</i>{{end}}</dd>
+
+    <dt class="col-sm-3">Queue</dt>
+    <dd class="col-sm-9"><code>{{.Info.Queue}}</code></dd>
+  </dl>
+
+  <div class="card mb-3">
+    <div class="card-header">Input</div>
+    <div class="card-body">
+      {{if .Inputs}}<div class="bg-dark text-light rounded p-2">{{range .Inputs}}<pre class="mb-0 text-light">{{.}}</pre>{{end}}</div>{{end}}
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">Result</div>
+    <div class="card-body">
+      {{if .ErrorJSON}}
+        <div class="bg-dark text-light rounded p-2"><pre class="mb-0 text-light">{{.ErrorJSON}}</pre></div>
+      {{else if .Result}}
+        <div class="bg-dark text-light rounded p-2"><pre class="mb-0 text-light">{{.Result}}</pre></div>
+      {{end}}
+    </div>
+  </div>
+
+  <h2 class="h5 mt-4">Workflow Tree</h2>
+  {{if .Tree}}
+    <ul class="list-group">
+      {{template "treeNode" dict "Node" .Tree "BasePath" .BasePath "CurrentID" .Info.Instance.InstanceID}}
+    </ul>
+  {{else}}
+    <p class="text-muted">No tree available.</p>
+  {{end}}
+
+  <h2 class="h5 mt-4">History</h2>
+  <div class="accordion" id="history">
+    {{range $idx, $ev := .History}}
+    <div class="accordion-item">
+      <h2 class="accordion-header">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#h{{$idx}}">
+          <span class="text-secondary me-2" style="width:48px">#{{$ev.SequenceID}}</span>
+          {{$c := eventColor $ev.Type}}
+          <span class="badge text-bg-{{$c.Bg}} text-{{$c.Text}} me-2"><code>{{$ev.Type}}</code></span>
+          {{if $ev.ScheduleEventID}}
+            {{$s := scheduleEventIDColor $ev.ScheduleEventID}}
+            <span class="badge rounded-pill text-{{$s.Text}} me-2" style="background:{{$s.BG}}"><code>{{$ev.ScheduleEventID}}</code></span>
+          {{end}}
+          <span class="ms-auto text-secondary small">{{fmtTime $ev.Timestamp}}</span>
+        </button>
+      </h2>
+      <div id="h{{$idx}}" class="accordion-collapse collapse" data-bs-parent="#history">
+        <div class="accordion-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-3">Event ID</dt>
+            <dd class="col-sm-9"><code>{{$ev.ID}}</code></dd>
+            <dt class="col-sm-3">Schedule Event ID</dt>
+            <dd class="col-sm-9">{{if $ev.ScheduleEventID}}{{$ev.ScheduleEventID}}{{else}}<i>none</i>{{end}}</dd>
+            {{if $ev.VisibleAt}}
+            <dt class="col-sm-3">Visible At</dt>
+            <dd class="col-sm-9">{{fmtTimePtr $ev.VisibleAt}}</dd>
+            {{end}}
+            <dt class="col-sm-3">Attributes</dt>
+            <dd class="col-sm-9">
+              <div class="bg-dark text-light rounded p-2"><pre class="mb-0 text-light">{{formatAttributes $ev.Attributes}}</pre></div>
+            </dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+    {{end}}
+  </div>
+{{end}}
+
+{{/* treeNode recursively renders a sub-workflow tree. Arg is a dict with
+     .Node (*diag.WorkflowInstanceTree), .BasePath, .CurrentID. */}}
+{{define "treeNode"}}
+  {{$node := .Node}}
+  <li class="list-group-item">
+    <a href="{{instanceLink .BasePath $node.Instance.InstanceID $node.Instance.ExecutionID}}">{{if $node.WorkflowName}}{{$node.WorkflowName}}{{else}}(pending){{end}}</a>{{if eq $node.Instance.InstanceID .CurrentID}} &#9679;{{end}}
+    {{template "stateBadge" stateBadge $node.State $node.Error}}
+    <code class="small text-muted">{{$node.Instance.InstanceID}}</code>
+    {{if $node.Children}}
+    <ul class="list-group mt-2">
+      {{range $node.Children}}
+        {{template "treeNode" dict "Node" . "BasePath" $.BasePath "CurrentID" $.CurrentID}}
+      {{end}}
+    </ul>
+    {{end}}
+  </li>
+{{end}}

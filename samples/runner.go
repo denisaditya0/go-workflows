@@ -9,7 +9,7 @@ import (
 
 	"github.com/cschleiden/go-workflows/backend"
 	"github.com/cschleiden/go-workflows/backend/postgres"
-	"github.com/cschleiden/go-workflows/diag"
+	diagtempl "github.com/cschleiden/go-workflows/diag/templ"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -52,7 +52,7 @@ func GetBackend(name string, recreate bool, opt ...backend.BackendOption) backen
 
 	// Start diagnostic server under /diag
 	m := http.NewServeMux()
-	m.Handle("/diag/", http.StripPrefix("/diag", diag.NewServeMux(b)))
+	m.Handle("/diag/", http.StripPrefix("/diag", diagtempl.NewServeMux(b)))
 	go http.ListenAndServe(":3000", m)
 
 	log.Println("Debug UI available at http://localhost:3000/diag")

@@ -738,11 +738,11 @@ The `context-propagation` sample shows an example of how to use this.
 
 ```go
 m := http.NewServeMux()
-m.Handle("/diag/", http.StripPrefix("/diag", diag.NewServeMux(b)))
+m.Handle("/diag/", http.StripPrefix("/diag", templ.NewServeMux(b)))
 go http.ListenAndServe(":3000", m)
 ```
 
-For investigating workflows, the package includes a simple diagnostic web UI. You can serve it via `diag.NewServeMux`.
+For investigating workflows, the package includes a server-rendered diagnostic web UI, served via `diag/templ.NewServeMux`. It reads directly from a `diag.Backend`. If you need the underlying JSON API instead, `diag.NewServeMux` exposes it under `/api/`.
 
 It provides a simple paginated list of workflow instances:
 

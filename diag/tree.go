@@ -51,8 +51,12 @@ func (itb *instanceTreeBuilder) BuildWorkflowInstanceTree(ctx context.Context, i
 			return nil, fmt.Errorf("getting children of instance %s: %w", node.Instance.InstanceID, err)
 		}
 
-		node.WorkflowName = name
-		node.Error = hasError
+		// Prefer the promoted columns (populated on the embedded ref by the diag
+		// query): workflow_name is set at create time, and the error column
+		// distinguishes failed from completed (#469). Fall back to the
+		// history-derived values for rows predating the promotion migration.
+		node.WorkflowName = firstNonEmpty(refWorkflowName(node.WorkflowInstanceRef), name)
+		node.Error = refHasError(node.WorkflowInstanceRef) || hasError
 
 		for _, child := range children {
 			t := &WorkflowInstanceTree{
@@ -135,4 +139,22 @@ func (itb *instanceTreeBuilder) getInstance(ctx context.Context, instance *core.
 	itb.instanceByID[instanceKey] = instanceRef
 
 	return instanceRef, nil
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+func refWorkflowName(ref *WorkflowInstanceRef) string {
+	if ref == nil {
+		return ""
+	}
+	return ref.WorkflowName
+}
+
+func refHasError(ref *WorkflowInstanceRef) bool {
+	return ref != nil && ref.HasError
 }

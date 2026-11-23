@@ -1,9 +1,7 @@
 package diag
 
 import (
-	"embed"
 	"encoding/json"
-	"io/fs"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,11 +9,9 @@ import (
 	"github.com/cschleiden/go-workflows/core"
 )
 
-//go:embed app/build
-var embeddedFiles embed.FS
-
-// NewServeMux returns an *http.ServeMux that serves the diagnostics web app at / and the diagnostics API at /api which is
-// used by the web app.
+// NewServeMux returns an *http.ServeMux that serves the diagnostics JSON API under
+// /api/. It does not serve a UI; use diag/templ.NewServeMux for the
+// server-rendered diagnostics UI.
 func NewServeMux(backend Backend) *http.ServeMux {
 	mux := http.NewServeMux()
 
@@ -167,20 +163,5 @@ func NewServeMux(backend Backend) *http.ServeMux {
 		}
 	})
 
-	// App
-	mux.Handle("/", http.FileServer(getFileSystem()))
-
 	return mux
-}
-
-func getFileSystem() http.FileSystem {
-	// Get the build subdirectory as the
-	// root directory so that it can be passed
-	// to the http.FileServer
-	fsys, err := fs.Sub(embeddedFiles, "app/build")
-	if err != nil {
-		panic(err)
-	}
-
-	return http.FS(fsys)
 }

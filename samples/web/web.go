@@ -11,6 +11,7 @@ import (
 	"github.com/cschleiden/go-workflows/backend"
 	"github.com/cschleiden/go-workflows/client"
 	"github.com/cschleiden/go-workflows/diag"
+	diagtempl "github.com/cschleiden/go-workflows/diag/templ"
 	"github.com/cschleiden/go-workflows/samples"
 
 	"github.com/cschleiden/go-workflows/worker"
@@ -28,10 +29,25 @@ func main() {
 		panic("backend does not implement diag.Backend")
 	}
 
-	// Start diagnostic server under /diag
+	// Serve the server-rendered templ diagnostics UI at http://localhost:3001/diag/.
+	//
+	// Note: samples.GetBackend already starts a diagnostics server on :3000; this
+	// sample uses :3001 to avoid the port clash.
 	m := http.NewServeMux()
-	m.Handle("/diag/", http.StripPrefix("/diag", diag.NewServeMux(db)))
-	go http.ListenAndServe(":3000", m)
+	m.Handle("/diag/", http.StripPrefix("/diag", diagtempl.NewServeMux(db)))
+	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<!doctype html><html><body style="font-family:sans-serif;padding:2rem">` +
+			`<h1>go-workflows diagnostics</h1><ul>` +
+			`<li><a href="/diag/">Diagnostics UI (server-rendered templ)</a></li>` +
+			`</ul></body></html>`))
+	})
+	log.Println("Diagnostics UI: http://localhost:3001/diag/")
+	go http.ListenAndServe(":3001", m)
 
 	// Run worker
 	w := RunWorker(ctx, b)
@@ -60,16 +76,24 @@ func runWorkflow(ctx context.Context, c *client.Client) {
 		Times: 2,
 	})
 	if err != nil {
-		log.Fatal(err)
-		panic("could not start workflow")
+		log.Println("could not start workflow:", err)
+		return
 	}
 
-	result, err := client.GetWorkflowResult[int](ctx, c, wf, time.Second*10)
-	if err != nil {
-		log.Fatal(err)
-	}
+	log.Printf("Started workflow %s; browse the diag UI while it runs.", wf.InstanceID)
 
-	log.Println("Workflow finished. Result:", result)
+	// Wait for the result in the background so the HTTP server (diag UI) stays
+	// up regardless of how long the workflow takes. The sample's Activity1 sleeps
+	// ~50s, so a short timeout would otherwise kill the process before you can
+	// open a browser.
+	go func() {
+		result, err := client.GetWorkflowResult[int](ctx, c, wf, 2*time.Minute)
+		if err != nil {
+			log.Println("workflow did not finish:", err)
+			return
+		}
+		log.Println("Workflow finished. Result:", result)
+	}()
 }
 
 func RunWorker(ctx context.Context, mb backend.Backend) *worker.Worker {
