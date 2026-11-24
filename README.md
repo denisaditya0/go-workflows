@@ -1,13 +1,28 @@
 # Durable workflows using Go — PostgreSQL-centric fork
 
-> **Fork notice.** This is a PostgreSQL-specialized fork of
-> [`cschleiden/go-workflows`](https://github.com/cschleiden/go-workflows). The module path is
+> **Fork notice.** This repository is a PostgreSQL-specialized fork of
+> [`cschleiden/go-workflows`](https://github.com/cschleiden/go-workflows), maintained at
+> [`denisaditya0/go-workflows`](https://github.com/denisaditya0/go-workflows). The module path is
 > unchanged (`github.com/cschleiden/go-workflows`) and the public workflow/activity API stays
 > compatible with upstream, but the backend story is different: **PostgreSQL is the only backend**,
 > and the storage layer has been extended with Postgres-specific features. See
-> [What's different](#whats-different-from-upstream) below.
+> [What's different](#whats-different-from-upstream) below and the
+> [releases page](https://github.com/denisaditya0/go-workflows/releases) for changes.
 
-Borrows heavily from [Temporal](https://github.com/temporalio/temporal) (and since it's a fork also [Cadence](https://github.com/uber/cadence)) as well as [DTFx](https://github.com/Azure/durabletask).
+## Using this fork
+
+The module path stays `github.com/cschleiden/go-workflows`, so consume the fork with a `replace`
+directive (Go 1.26+):
+
+```go
+require github.com/cschleiden/go-workflows v0.0.0
+
+replace github.com/cschleiden/go-workflows => github.com/denisaditya0/go-workflows v1.7.0-postgres
+```
+
+Then run `go mod tidy`. Import paths and the workflow/activity API are unchanged.
+
+Borrows heavily from [Temporal](https://github.com/temporalio/temporal), [Cadence](https://github.com/uber/cadence), and [DTFx](https://github.com/Azure/durabletask); this fork tracks [`cschleiden/go-workflows`](https://github.com/cschleiden/go-workflows).
 
 Upstream background reading:
 - https://cschleiden.dev/blog/2022-02-13-go-workflows-part1/
@@ -45,8 +60,9 @@ For the full design rationale, roadmap, and the explicit caveats behind these de
 ## Docs
 
 Upstream documentation (API, guide, patterns) applies to the workflow/activity programming model:
-http://cschleiden.github.io/go-workflows. Backend-specific behavior for this fork is documented in
-the `docs/` directory of this repository.
+http://cschleiden.github.io/go-workflows. Fork-specific backend behavior, design decisions, and
+release notes are documented in the `docs/` directory and on the
+[releases page](https://github.com/denisaditya0/go-workflows/releases).
 
 ## Simple example
 
