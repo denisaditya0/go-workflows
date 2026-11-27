@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 
-	"github.com/cschleiden/go-workflows/activity"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/denisaditya0/go-workflows/activity"
+	"github.com/denisaditya0/go-workflows/workflow"
 )
 
 type Inputs struct {

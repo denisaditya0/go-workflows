@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/diag"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/denisaditya0/go-workflows/client"
+	"github.com/denisaditya0/go-workflows/diag"
+	"github.com/denisaditya0/go-workflows/worker"
+	"github.com/denisaditya0/go-workflows/workflow"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )

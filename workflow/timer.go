@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cschleiden/go-workflows/internal/command"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/tracing"
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
+	"github.com/denisaditya0/go-workflows/internal/command"
+	"github.com/denisaditya0/go-workflows/internal/contextvalue"
+	"github.com/denisaditya0/go-workflows/internal/sync"
+	"github.com/denisaditya0/go-workflows/internal/workflowstate"
 )
 
 type timerConfig struct {
@@ -57,9 +56,7 @@ func ScheduleTimer(ctx Context, delay time.Duration, opts ...timerOption) Future
 
 	at := Now(ctx).Add(delay)
 
-	traceContext := tracing.ContextFromWfCtx(ctx)
-
-	timerCmd := command.NewScheduleTimerCommand(scheduleEventID, at, timerConfig.Name, traceContext)
+	timerCmd := command.NewScheduleTimerCommand(scheduleEventID, at, timerConfig.Name)
 	wfState.AddCommand(timerCmd)
 
 	timerSuffix := ""

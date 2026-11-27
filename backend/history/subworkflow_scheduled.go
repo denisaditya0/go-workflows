@@ -1,9 +1,9 @@
 package history
 
 import (
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/backend/metadata"
+	"github.com/denisaditya0/go-workflows/backend/payload"
+	"github.com/denisaditya0/go-workflows/core"
 )
 
 type SubWorkflowScheduledAttributes struct {
@@ -16,6 +16,4 @@ type SubWorkflowScheduledAttributes struct {
 	Inputs []payload.Payload `json:"inputs,omitempty"`
 
 	Metadata *metadata.WorkflowMetadata `json:"metadata,omitempty"`
-
-	WorkflowSpanID [8]byte `json:"workflow_span_id,omitempty"`
 }

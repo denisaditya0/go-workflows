@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/activity"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/denisaditya0/go-workflows/activity"
+	"github.com/denisaditya0/go-workflows/client"
+	"github.com/denisaditya0/go-workflows/worker"
+	"github.com/denisaditya0/go-workflows/workflow"
 	"github.com/stretchr/testify/require"
 )
 

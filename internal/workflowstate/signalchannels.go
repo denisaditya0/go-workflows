@@ -1,9 +1,9 @@
 package workflowstate
 
 import (
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/sync"
+	"github.com/denisaditya0/go-workflows/backend/payload"
+	"github.com/denisaditya0/go-workflows/internal/contextvalue"
+	"github.com/denisaditya0/go-workflows/internal/sync"
 )
 
 func ReceiveSignal(wf *WfState, name string, arg payload.Payload) {

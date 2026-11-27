@@ -7,7 +7,6 @@ This repository provides a single backend implementation backed by **PostgreSQL*
 - `WithActivityLockTimeout(timeout time.Duration)` - Set the timeout for activity task locks. Defaults to 2 minutes
 - `WithLogger(logger *slog.Logger)` - Set the logger implementation
 - `WithMetrics(client metrics.Client)` - Set the metrics client
-- `WithTracerProvider(tp trace.TracerProvider)` - Set the OpenTelemetry tracer provider
 - `WithConverter(converter converter.Converter)` - Provide a custom `Converter` implementation
 - `WithContextPropagator(prop workflow.ContextPropagator)` - Adds a custom context propagator
 - `WithRemoveContinuedAsNewInstances()` - Immediately removes workflow instances that complete using ContinueAsNew, including their history. ContinueAsNew allows workflows to restart with new parameters while preserving the same instance ID. By default, such instances are retained according to the configured retention policy. Use this option to prevent storage bloat in workflows that frequently use ContinueAsNew.

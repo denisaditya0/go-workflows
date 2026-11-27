@@ -9,22 +9,21 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/command"
-	"github.com/cschleiden/go-workflows/internal/common/fn"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/registry"
-	wf "github.com/cschleiden/go-workflows/workflow"
-	executorapi "github.com/cschleiden/go-workflows/workflow/executor"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/converter"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/backend/metadata"
+	"github.com/denisaditya0/go-workflows/backend/payload"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/internal/args"
+	"github.com/denisaditya0/go-workflows/internal/command"
+	"github.com/denisaditya0/go-workflows/internal/common/fn"
+	"github.com/denisaditya0/go-workflows/internal/sync"
+	"github.com/denisaditya0/go-workflows/registry"
+	wf "github.com/denisaditya0/go-workflows/workflow"
+	executorapi "github.com/denisaditya0/go-workflows/workflow/executor"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/goleak"
 )
 
@@ -38,9 +37,8 @@ func (t *testHistoryProvider) GetWorkflowInstanceHistory(ctx context.Context, in
 
 func newExecutor(r *registry.Registry, i *core.WorkflowInstance, historyProvider executorapi.WorkflowHistoryProvider) (*executor, error) {
 	logger := slog.Default()
-	tracer := noop.NewTracerProvider().Tracer("test")
 
-	e, err := NewExecutor(logger, tracer, r, converter.DefaultConverter, []wf.ContextPropagator{}, historyProvider, i, &metadata.WorkflowMetadata{}, clock.New(), 10_000)
+	e, err := NewExecutor(logger, r, converter.DefaultConverter, []wf.ContextPropagator{}, historyProvider, i, &metadata.WorkflowMetadata{}, clock.New(), 10_000)
 
 	return e.(*executor), err
 }

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/denisaditya0/go-workflows/workflow"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-// Reproduces https://github.com/cschleiden/go-workflows/issues/377
+// Reproduces https://github.com/denisaditya0/go-workflows/issues/377
 func benchWF(ctx workflow.Context, n int) error {
 	wg := workflow.NewWaitGroup()
 	for range n {

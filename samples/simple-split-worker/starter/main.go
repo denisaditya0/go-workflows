@@ -4,9 +4,9 @@ import (
 	"context"
 	"log"
 
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/samples"
-	simple_split_worker "github.com/cschleiden/go-workflows/samples/simple-split-worker"
+	"github.com/denisaditya0/go-workflows/client"
+	"github.com/denisaditya0/go-workflows/samples"
+	simple_split_worker "github.com/denisaditya0/go-workflows/samples/simple-split-worker"
 	"github.com/google/uuid"
 )
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"math/rand"
 
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/denisaditya0/go-workflows/workflow"
 )
 
 type MidInput struct {

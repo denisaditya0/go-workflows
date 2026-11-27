@@ -6,10 +6,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/internal/sync"
+	"github.com/denisaditya0/go-workflows/workflow"
 )
 
 const (

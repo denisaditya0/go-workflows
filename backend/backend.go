@@ -9,11 +9,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/workflow"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/backend/metrics"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/workflow"
 )
 
 var ErrInstanceNotFound = errors.New("workflow instance not found")
@@ -27,8 +26,6 @@ type ErrNotSupported struct {
 func (e ErrNotSupported) Error() string {
 	return fmt.Sprintf("not supported: %s", e.Message)
 }
-
-const TracerName = "go-workflow"
 
 //go:generate mockery --name=Backend --inpackage
 type Backend interface {
@@ -88,9 +85,6 @@ type Backend interface {
 
 	// GetStats returns stats about the backend
 	GetStats(ctx context.Context) (*Stats, error)
-
-	// Tracer returns the configured trace provider for the backend
-	Tracer() trace.Tracer
 
 	// Metrics returns the configured metrics client for the backend
 	Metrics() metrics.Client

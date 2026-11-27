@@ -12,20 +12,17 @@ import (
 
 	"github.com/benbjohnson/clock"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	"github.com/cschleiden/go-workflows/core"
-	a "github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/common/fn"
-	"github.com/cschleiden/go-workflows/internal/common/log"
-	"github.com/cschleiden/go-workflows/internal/common/metrickeys"
-	"github.com/cschleiden/go-workflows/internal/tracing"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/backend/metrics"
+	"github.com/denisaditya0/go-workflows/core"
+	a "github.com/denisaditya0/go-workflows/internal/args"
+	"github.com/denisaditya0/go-workflows/internal/common/fn"
+	"github.com/denisaditya0/go-workflows/internal/common/log"
+	"github.com/denisaditya0/go-workflows/internal/common/metrickeys"
+	"github.com/denisaditya0/go-workflows/internal/workflowerrors"
+	"github.com/denisaditya0/go-workflows/workflow"
 	"github.com/google/uuid"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // ErrWorkflowCanceled is returned when a workflow was already canceled.
@@ -90,14 +87,6 @@ func (c *Client) CreateWorkflowInstance(ctx context.Context, options WorkflowIns
 	wfi := core.NewWorkflowInstance(options.InstanceID, uuid.NewString())
 	metadata := &workflow.Metadata{}
 
-	// Span for creating the workflow instance
-	ctx, span := c.backend.Tracer().Start(ctx, "CreateWorkflowInstance", trace.WithAttributes(
-		attribute.String(log.InstanceIDKey, wfi.InstanceID),
-		attribute.String(log.ExecutionIDKey, wfi.ExecutionID),
-		attribute.String(log.WorkflowNameKey, workflowName),
-	), trace.WithSpanKind(trace.SpanKindProducer))
-	defer span.End()
-
 	// Inject state from any propagators
 	for _, propagator := range c.backend.Options().ContextPropagators {
 		if err := propagator.Inject(ctx, metadata); err != nil {
@@ -105,17 +94,14 @@ func (c *Client) CreateWorkflowInstance(ctx context.Context, options WorkflowIns
 		}
 	}
 
-	workflowSpanID := tracing.GetNewSpanID(c.backend.Tracer())
-
 	startedEvent := history.NewPendingEvent(
 		c.clock.Now(),
 		history.EventType_WorkflowExecutionStarted,
 		&history.ExecutionStartedAttributes{
-			Queue:          options.Queue,
-			Metadata:       metadata,
-			Name:           workflowName,
-			Inputs:         inputs,
-			WorkflowSpanID: workflowSpanID,
+			Queue:    options.Queue,
+			Metadata: metadata,
+			Name:     workflowName,
+			Inputs:   inputs,
 		})
 
 	if err := c.backend.CreateWorkflowInstance(ctx, wfi, startedEvent); err != nil {
@@ -136,23 +122,12 @@ func (c *Client) CreateWorkflowInstance(ctx context.Context, options WorkflowIns
 
 // CancelWorkflowInstance cancels a running workflow instance.
 func (c *Client) CancelWorkflowInstance(ctx context.Context, instance *workflow.Instance) error {
-	ctx, span := c.backend.Tracer().Start(ctx, "CancelWorkflowInstance", trace.WithAttributes(
-		attribute.String(log.InstanceIDKey, instance.InstanceID),
-	))
-	defer span.End()
-
 	cancellationEvent := history.NewWorkflowCancellationEvent(time.Now())
 	return c.backend.CancelWorkflowInstance(ctx, instance, cancellationEvent)
 }
 
 // SignalWorkflow signals a running workflow instance.
 func (c *Client) SignalWorkflow(ctx context.Context, instanceID string, name string, arg any) error {
-	ctx, span := c.backend.Tracer().Start(ctx, "SignalWorkflow", trace.WithAttributes(
-		attribute.String(log.InstanceIDKey, instanceID),
-		attribute.String(log.SignalNameKey, name),
-	))
-	defer span.End()
-
 	input, err := c.backend.Options().Converter.To(arg)
 	if err != nil {
 		return fmt.Errorf("converting arguments: %w", err)
@@ -169,7 +144,6 @@ func (c *Client) SignalWorkflow(ctx context.Context, instanceID string, name str
 
 	err = c.backend.SignalWorkflow(ctx, instanceID, signalEvent)
 	if err != nil {
-		span.RecordError(err)
 		return err
 	}
 
@@ -188,11 +162,6 @@ func (c *Client) WaitForWorkflowInstance(ctx context.Context, instance *workflow
 	if timeout == 0 {
 		timeout = time.Second * 20
 	}
-
-	ctx, span := c.backend.Tracer().Start(ctx, "WaitForWorkflowInstance", trace.WithAttributes(
-		attribute.String(log.InstanceIDKey, instance.InstanceID),
-	))
-	defer span.End()
 
 	b := backoff.ExponentialBackOff{
 		InitialInterval:     time.Millisecond * 1,
@@ -226,11 +195,6 @@ func (c *Client) WaitForWorkflowInstance(ctx context.Context, instance *workflow
 // the given timeout has expired.
 func GetWorkflowResult[T any](ctx context.Context, c *Client, instance *workflow.Instance, timeout time.Duration) (T, error) {
 	b := c.backend
-
-	ctx, span := b.Tracer().Start(ctx, "GetWorkflowResult", trace.WithAttributes(
-		attribute.String(log.InstanceIDKey, instance.InstanceID),
-	))
-	defer span.End()
 
 	if err := c.WaitForWorkflowInstance(ctx, instance, timeout); err != nil {
 		return *new(T), fmt.Errorf("workflow did not finish in time: %w", err)
@@ -283,18 +247,10 @@ func GetWorkflowResult[T any](ctx context.Context, c *Client, instance *workflow
 //
 // Instance needs to be in a completed state.
 func (c *Client) RemoveWorkflowInstance(ctx context.Context, instance *core.WorkflowInstance) error {
-	ctx, span := c.backend.Tracer().Start(ctx, "RemoveWorkflowInstance", trace.WithAttributes(
-		attribute.String(log.InstanceIDKey, instance.InstanceID),
-	))
-	defer span.End()
-
 	return c.backend.RemoveWorkflowInstance(ctx, instance)
 }
 
 // RemoveWorkflowInstances removes completed workflow instances from the backend.
 func (c *Client) RemoveWorkflowInstances(ctx context.Context, options ...backend.RemovalOption) error {
-	ctx, span := c.backend.Tracer().Start(ctx, "RemoveWorkflowInstances")
-	defer span.End()
-
 	return c.backend.RemoveWorkflowInstances(ctx, options...)
 }

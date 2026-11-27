@@ -5,9 +5,9 @@ import (
 	"html/template"
 	"io"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/diag"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/diag"
 )
 
 //go:embed templates/*.html

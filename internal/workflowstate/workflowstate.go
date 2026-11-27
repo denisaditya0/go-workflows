@@ -6,13 +6,11 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/command"
-	log "github.com/cschleiden/go-workflows/internal/common/log"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/denisaditya0/go-workflows/backend/converter"
+	"github.com/denisaditya0/go-workflows/backend/payload"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/internal/command"
+	"github.com/denisaditya0/go-workflows/internal/sync"
 )
 
 type key int
@@ -65,14 +63,13 @@ type WfState struct {
 	signalChannels map[string]*signalChannel
 
 	logger *slog.Logger
-	tracer trace.Tracer
 
 	clock         clock.Clock
 	time          time.Time
 	historyLength int64
 }
 
-func NewWorkflowState(instance *core.WorkflowInstance, logger *slog.Logger, tracer trace.Tracer, clock clock.Clock) *WfState {
+func NewWorkflowState(instance *core.WorkflowInstance, logger *slog.Logger, clock clock.Clock) *WfState {
 	state := &WfState{
 		instance:        instance,
 		commands:        []command.Command{},
@@ -82,8 +79,6 @@ func NewWorkflowState(instance *core.WorkflowInstance, logger *slog.Logger, trac
 
 		pendingSignals: map[string][]payload.Payload{},
 		signalChannels: make(map[string]*signalChannel),
-
-		tracer: tracer,
 
 		clock: clock,
 	}
@@ -168,19 +163,6 @@ func (wf *WfState) Instance() *core.WorkflowInstance {
 
 func (wf *WfState) Logger() *slog.Logger {
 	return wf.logger
-}
-
-// UpdateLoggerWithSpan updates the logger to include trace_id and span_id attributes
-// from the given span context.
-func (wf *WfState) UpdateLoggerWithSpan(sc trace.SpanContext) {
-	wf.logger = wf.logger.With(
-		slog.String(log.TraceIDKey, sc.TraceID().String()),
-		slog.String(log.SpanIDKey, sc.SpanID().String()),
-	)
-}
-
-func (wf *WfState) Tracer() trace.Tracer {
-	return wf.tracer
 }
 
 func (wf *WfState) SetHistoryLength(length int64) {

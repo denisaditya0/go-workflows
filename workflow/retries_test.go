@@ -7,14 +7,13 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
+	"github.com/denisaditya0/go-workflows/backend/converter"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/internal/contextvalue"
+	"github.com/denisaditya0/go-workflows/internal/sync"
+	"github.com/denisaditya0/go-workflows/internal/workflowerrors"
+	"github.com/denisaditya0/go-workflows/internal/workflowstate"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func TestWithRetries(t *testing.T) {
@@ -87,7 +86,7 @@ func TestWithRetries(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			state := workflowstate.NewWorkflowState(
-				core.NewWorkflowInstance("a", ""), slog.Default(), noop.NewTracerProvider().Tracer("test"), clock.New())
+				core.NewWorkflowInstance("a", ""), slog.Default(), clock.New())
 
 			ctx := sync.Background()
 			ctx = contextvalue.WithConverter(ctx, converter.DefaultConverter)
@@ -126,7 +125,7 @@ func TestWithRetries(t *testing.T) {
 // Test_WithRetries_PermanentError is kept separate as it has different async behavior
 func Test_WithRetries_PermanentError(t *testing.T) {
 	state := workflowstate.NewWorkflowState(
-		core.NewWorkflowInstance("a", ""), slog.Default(), noop.NewTracerProvider().Tracer("test"), clock.New())
+		core.NewWorkflowInstance("a", ""), slog.Default(), clock.New())
 
 	ctx := sync.Background()
 	ctx = contextvalue.WithConverter(ctx, converter.DefaultConverter)

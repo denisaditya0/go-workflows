@@ -8,17 +8,17 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/common/log"
-	"github.com/cschleiden/go-workflows/internal/common/metrickeys"
-	im "github.com/cschleiden/go-workflows/internal/metrics"
-	"github.com/cschleiden/go-workflows/internal/workflowengine"
-	"github.com/cschleiden/go-workflows/registry"
-	"github.com/cschleiden/go-workflows/workflow/executor"
-	"github.com/cschleiden/go-workflows/workflow/executor/cache"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/backend/metrics"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/internal/common/log"
+	"github.com/denisaditya0/go-workflows/internal/common/metrickeys"
+	im "github.com/denisaditya0/go-workflows/internal/metrics"
+	"github.com/denisaditya0/go-workflows/internal/workflowengine"
+	"github.com/denisaditya0/go-workflows/registry"
+	"github.com/denisaditya0/go-workflows/workflow/executor"
+	"github.com/denisaditya0/go-workflows/workflow/executor/cache"
 )
 
 type WorkflowWorkerOptions struct {
@@ -172,7 +172,6 @@ func (wtw *WorkflowTaskWorker) getExecutor(ctx context.Context, t *backend.Workf
 				slog.String(log.InstanceIDKey, t.WorkflowInstance.InstanceID),
 				slog.String(log.ExecutionIDKey, t.WorkflowInstance.ExecutionID),
 			),
-			wtw.backend.Tracer(),
 			wtw.registry,
 			wtw.backend.Options().Converter,
 			wtw.backend.Options().ContextPropagators,

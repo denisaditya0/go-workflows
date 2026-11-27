@@ -1,10 +1,10 @@
 package workflow
 
 import (
-	"github.com/cschleiden/go-workflows/internal/command"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
+	"github.com/denisaditya0/go-workflows/internal/command"
+	"github.com/denisaditya0/go-workflows/internal/contextvalue"
+	"github.com/denisaditya0/go-workflows/internal/sync"
+	"github.com/denisaditya0/go-workflows/internal/workflowstate"
 )
 
 // SideEffect executes the given function and returns a future that will be resolved with the result of
@@ -13,9 +13,6 @@ import (
 // In contrast to Activities, SideEffects are executed inline with the workflow code. They should only
 // be used for short and inexpensive operations. For longer operations, consider using an Activity.
 func SideEffect[TResult any](ctx Context, f func(ctx Context) TResult) Future[TResult] {
-	ctx, span := Tracer(ctx).Start(ctx, "SideEffect")
-	defer span.End()
-
 	future := sync.NewFuture[TResult]()
 
 	if ctx.Err() != nil {

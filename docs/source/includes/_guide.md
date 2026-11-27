@@ -252,7 +252,7 @@ You can schedule timers to fire at any point in the future by calling `workflow.
 t := workflow.ScheduleTimer(ctx, 2*time.Second, workflow.WithTimerName("my-timer"))
 ```
 
-You can optionally name timers for tracing and debugging purposes.
+You can optionally name timers for debugging purposes.
 
 ### Canceling timers
 
@@ -643,7 +643,7 @@ go-workflows supports structured logging using Go's `slog` package. `slog.Defaul
 logger := workflow.Logger(ctx)
 ```
 
-For logging in workflows, you can get a logger using `workflow.Logger`. The returned logger instance already has the workflow instance set as a default field. When tracing is enabled (via `backend.WithTracerProvider`), the logger also automatically includes `trace_id` and `span_id` attributes for trace correlation.
+For logging in workflows, you can get a logger using `workflow.Logger`. The returned logger instance already has the workflow instance set as a default field.
 
 ### Activities
 
@@ -652,65 +652,6 @@ logger := activity.Logger(ctx)
 ```
 
 For logging in activities, you can get a logger using `activity.Logger`. The returned logger already has the id of the activity, and the workflow instance set as default field.
-
-## Tracing
-
-The library supports tracing via [OpenTelemetry](https://opentelemetry.io/). When you pass a `TracerProvider` when creating a backend instance, workflow execution will be traced. You can also add additional spans for both activities and workflows.
-
-### Activities
-
-```go
-func Activity1(ctx context.Context, a, b int) (int, error) {
-	ctx, span := otel.Tracer("activity1").Start(ctx, "Custom Activity1 span")
-	defer span.End()
-
-	// Do something
-}
-```
-
-The `context.Context` passed into activities is set up with the correct current span. If you create additional spans, they'll show up under the `ActivityTaskExecution`.
-
-
-### Workflows
-
-```go
-func Workflow(ctx workflow.Context) error {
-	ctx, span := workflow.Tracer(ctx).Start(ctx, "Workflow1 span", trace.WithAttributes(
-		// Add additional
-		attribute.String("msg", "hello world"),
-	))
-
-	// Do something
-
-	span.End()
-```
-
-For workflows the usage is a bit different, the tracer needs to be aware of whether the workflow is being replayed or not. You can get a replay-aware tracer with `workflow.Tracer(ctx)`.
-
-### Accessing TraceID and SpanID
-
-```go
-func Workflow(ctx workflow.Context) error {
-	// From a span you created
-	ctx, span := workflow.Tracer(ctx).Start(ctx, "my-span")
-	defer span.End()
-
-	sc := span.SpanContext()
-	traceID := sc.TraceID().String()
-	spanID := sc.SpanID().String()
-
-	// Or from the current workflow span
-	currentSpan := workflow.SpanFromContext(ctx)
-	if currentSpan != nil {
-		sc := currentSpan.SpanContext()
-		// Use sc.TraceID(), sc.SpanID() for correlation
-	}
-
-	return nil
-}
-```
-
-You can access the `TraceID` and `SpanID` from any workflow span via the `SpanContext()` method. Use `workflow.SpanFromContext(ctx)` to retrieve the current active span from the workflow context without creating a new one. This is useful for correlating logs with traces or passing trace context to external systems.
 
 ## Context Propagation
 

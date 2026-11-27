@@ -1,7 +1,7 @@
 package workflow
 
 import (
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
+	"github.com/denisaditya0/go-workflows/internal/workflowstate"
 )
 
 // Replaying returns true if the current workflow execution is replaying or not.

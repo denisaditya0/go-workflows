@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/denisaditya0/go-workflows/internal/sync"
+	"github.com/denisaditya0/go-workflows/internal/workflowerrors"
+	"github.com/denisaditya0/go-workflows/workflow"
 	"github.com/stretchr/testify/require"
 )
 

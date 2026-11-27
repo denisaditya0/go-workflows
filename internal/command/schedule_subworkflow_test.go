@@ -4,10 +4,10 @@ import (
 	"testing"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/backend/metadata"
+	"github.com/denisaditya0/go-workflows/backend/payload"
+	"github.com/denisaditya0/go-workflows/core"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -98,7 +98,7 @@ func TestScheduleSubWorkflowCommand_StateTransitions(t *testing.T) {
 			parentInstance := core.NewWorkflowInstance(uuid.NewString(), "")
 
 			cmd := NewScheduleSubWorkflowCommand(
-				1, parentInstance, core.QueueDefault, uuid.NewString(), "SubWorkflow", []payload.Payload{}, &metadata.WorkflowMetadata{}, [8]byte{})
+				1, parentInstance, core.QueueDefault, uuid.NewString(), "SubWorkflow", []payload.Payload{}, &metadata.WorkflowMetadata{})
 
 			tt.f(t, cmd, clock)
 		})

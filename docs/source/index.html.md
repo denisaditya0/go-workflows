@@ -2,7 +2,7 @@
 title: go-workflows
 
 toc_footers:
-  - <a href='https://github.com/cschleiden/go-workflows'>GitHub</a>
+  - <a href='https://github.com/denisaditya0/go-workflows'>GitHub</a>
 
 includes:
   - guide

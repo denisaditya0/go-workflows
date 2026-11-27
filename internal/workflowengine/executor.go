@@ -16,28 +16,24 @@ import (
 	"reflect"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/command"
-	"github.com/cschleiden/go-workflows/internal/common/log"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/continueasnew"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/tracing"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
-	"github.com/cschleiden/go-workflows/registry"
-	wf "github.com/cschleiden/go-workflows/workflow"
-	executorapi "github.com/cschleiden/go-workflows/workflow/executor"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/converter"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/backend/metadata"
+	"github.com/denisaditya0/go-workflows/backend/payload"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/internal/command"
+	"github.com/denisaditya0/go-workflows/internal/common/log"
+	"github.com/denisaditya0/go-workflows/internal/contextvalue"
+	"github.com/denisaditya0/go-workflows/internal/continueasnew"
+	"github.com/denisaditya0/go-workflows/internal/sync"
+	"github.com/denisaditya0/go-workflows/internal/workflowerrors"
+	"github.com/denisaditya0/go-workflows/internal/workflowstate"
+	"github.com/denisaditya0/go-workflows/registry"
+	wf "github.com/denisaditya0/go-workflows/workflow"
+	executorapi "github.com/denisaditya0/go-workflows/workflow/executor"
 )
 
 type executor struct {
@@ -51,17 +47,13 @@ type executor struct {
 	cv                converter.Converter
 	clock             clock.Clock
 	logger            *slog.Logger
-	tracer            trace.Tracer
 	lastSequenceID    int64
-
-	workflowSpan trace.Span
 
 	maxHistorySize int64
 }
 
 func NewExecutor(
 	logger *slog.Logger,
-	tracer trace.Tracer,
 	r *registry.Registry,
 	cv converter.Converter,
 	propagators []wf.ContextPropagator,
@@ -71,7 +63,7 @@ func NewExecutor(
 	clock clock.Clock,
 	maxHistorySize int64,
 ) (executorapi.WorkflowExecutor, error) {
-	s := workflowstate.NewWorkflowState(instance, logger, tracer, clock)
+	s := workflowstate.NewWorkflowState(instance, logger, clock)
 
 	wfCtx := sync.Background()
 	wfCtx = contextvalue.WithConverter(wfCtx, cv)
@@ -101,7 +93,6 @@ func NewExecutor(
 		clock:             clock,
 		maxHistorySize:    maxHistorySize,
 		logger:            logger,
-		tracer:            tracer,
 	}, nil
 }
 
@@ -279,8 +270,6 @@ func (e *executor) executeNewEvents(newEvents []*history.Event) ([]*history.Even
 	}
 
 	if e.workflow.Completed() {
-		defer e.workflowSpan.End()
-
 		if e.workflowState.HasPendingFutures() {
 			// This should not happen, provide debug information to the developer
 			var pending []string
@@ -294,8 +283,7 @@ func (e *executor) executeNewEvents(newEvents []*history.Event) ([]*history.Even
 				panic(fmt.Sprintf("workflow completed, but there are still pending futures: %s", pending))
 			}
 
-			return newEvents, tracing.WithSpanError(
-				e.workflowSpan, fmt.Errorf("workflow completed, but there are still pending futures: %s", pending))
+			return newEvents, fmt.Errorf("workflow completed, but there are still pending futures: %s", pending)
 		}
 
 		if canErr, ok := e.workflow.Error().(*continueasnew.Error); ok {
@@ -401,24 +389,6 @@ func (e *executor) handleWorkflowExecutionStarted(event *history.Event, a *histo
 	if err != nil {
 		return fmt.Errorf("workflow %s not found", a.Name)
 	}
-
-	// Set the parent span here, so we can associate the workflow span with its parent
-	parentSpan := tracing.SpanFromContext(e.workflowCtx)
-	ctx := trace.ContextWithSpan(context.Background(), parentSpan)
-
-	span := tracing.SpanWithStartTime(
-		ctx,
-		e.tracer,
-		tracing.WorkflowSpanName(e.workflowName),
-		a.WorkflowSpanID,
-		event.Timestamp)
-
-	// Set in context for workflow execution
-	e.workflowCtx = tracing.ContextWithSpan(e.workflowCtx, span)
-	e.workflowSpan = span
-
-	// Update logger with trace context so workflow.Logger includes trace_id and span_id
-	e.workflowState.UpdateLoggerWithSpan(span.SpanContext())
 
 	e.workflow = newWorkflow(reflect.ValueOf(wfFn))
 	return e.workflow.Execute(e.workflowCtx, a.Inputs)
@@ -533,25 +503,6 @@ func (e *executor) handleTimerFired(event *history.Event, a *history.TimerFiredA
 	if !ok {
 		// Timer already canceled ignore
 		return nil
-	}
-
-	if !e.workflowState.Replaying() {
-		// Trace timer fired
-		spanName := "Timer"
-		if a.Name != "" {
-			spanName = spanName + ": " + a.Name
-		}
-
-		sctx := context.Background()
-		if a.TraceContext != nil {
-			sctx = tracing.SpanContextFromContext(sctx, a.TraceContext)
-		}
-		_, span := e.tracer.Start(sctx, spanName, trace.WithAttributes(
-			attribute.Int64(log.DurationKey, int64(a.At.Sub(a.ScheduledAt)/time.Millisecond)),
-			attribute.String(log.NowKey, a.ScheduledAt.String()),
-			attribute.String(log.AtKey, a.At.String()),
-		), trace.WithTimestamp(a.ScheduledAt))
-		span.End()
 	}
 
 	if err := f.Set(nil, nil); err != nil {
@@ -732,29 +683,9 @@ func (e *executor) handleSideEffectResult(event *history.Event, a *history.SideE
 }
 
 func (e *executor) handleTraceStarted(event *history.Event, a *history.TraceStartedAttributes) error {
-	c := e.workflowState.CommandByScheduleEventID(event.ScheduleEventID)
-	if c == nil {
-		return fmt.Errorf("previous workflow execution started a trace")
-	}
-
-	stc, ok := c.(*command.StartTraceCommand)
-	if !ok {
-		return fmt.Errorf("previous workflow execution started a trace, not: %v", c.Type())
-	}
-
-	stc.Done()
-
-	f, ok := e.workflowState.FutureByScheduleEventID(event.ScheduleEventID)
-	if !ok {
-		return errors.New("no pending future found for start trace event")
-	}
-
-	if err := f.Set(a.SpanID, nil); err != nil {
-		return fmt.Errorf("setting start trace spanID: %w", err)
-	}
-
-	e.workflowState.RemoveFuture(event.ScheduleEventID)
-
+	// Tracing has been removed. TraceStarted events can still be present in the
+	// history of instances created while tracing was enabled; ignore them so that
+	// replay of those histories does not fail.
 	return e.workflow.Continue()
 }
 
@@ -771,10 +702,6 @@ func (e *executor) workflowRestarted(result payload.Payload, continueAsNew *cont
 	cmd := command.NewContinueAsNewCommand(
 		eventId, e.workflowState.Instance(), result, e.workflowName, continueAsNew.Metadata, continueAsNew.Inputs)
 	e.workflowState.AddCommand(cmd)
-
-	e.workflowSpan.SetAttributes(
-		attribute.String(log.ContinuedExecutionIDKey, cmd.ContinuedExecutionID),
-	)
 }
 
 func (e *executor) nextSequenceID() int64 {

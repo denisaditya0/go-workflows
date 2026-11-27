@@ -4,21 +4,19 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/internal/tracing"
+	"github.com/denisaditya0/go-workflows/backend/history"
 )
 
 type ScheduleTimerCommand struct {
 	cancelableCommand
 
-	at           time.Time
-	name         string
-	traceContext tracing.Context
+	at   time.Time
+	name string
 }
 
 var _ CancelableCommand = (*ScheduleTimerCommand)(nil)
 
-func NewScheduleTimerCommand(id int64, at time.Time, name string, traceContext tracing.Context) *ScheduleTimerCommand {
+func NewScheduleTimerCommand(id int64, at time.Time, name string) *ScheduleTimerCommand {
 	return &ScheduleTimerCommand{
 		cancelableCommand: cancelableCommand{
 			command: command{
@@ -27,9 +25,8 @@ func NewScheduleTimerCommand(id int64, at time.Time, name string, traceContext t
 				state: CommandState_Pending,
 			},
 		},
-		at:           at,
-		name:         name,
-		traceContext: traceContext,
+		at:   at,
+		name: name,
 	}
 }
 
@@ -58,10 +55,9 @@ func (c *ScheduleTimerCommand) Execute(clock clock.Clock) *CommandResult {
 					clock.Now(),
 					history.EventType_TimerFired,
 					&history.TimerFiredAttributes{
-						ScheduledAt:  now,
-						At:           c.at,
-						Name:         c.name,
-						TraceContext: c.traceContext,
+						ScheduledAt: now,
+						At:          c.at,
+						Name:        c.name,
 					},
 					history.ScheduleEventID(c.id),
 					history.VisibleAt(c.at),

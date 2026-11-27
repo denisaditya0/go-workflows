@@ -7,16 +7,16 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/activityengine"
-	"github.com/cschleiden/go-workflows/internal/common/metrickeys"
-	im "github.com/cschleiden/go-workflows/internal/metrics"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/registry"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/backend/metrics"
+	"github.com/denisaditya0/go-workflows/backend/payload"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/internal/activityengine"
+	"github.com/denisaditya0/go-workflows/internal/common/metrickeys"
+	im "github.com/denisaditya0/go-workflows/internal/metrics"
+	"github.com/denisaditya0/go-workflows/internal/workflowerrors"
+	"github.com/denisaditya0/go-workflows/registry"
 )
 
 func NewActivityWorker(
@@ -25,7 +25,7 @@ func NewActivityWorker(
 	clock clock.Clock,
 	options WorkerOptions,
 ) *Worker[backend.ActivityTask, history.Event] {
-	ae := activityengine.NewExecutor(b.Options().Logger, b.Tracer(), b.Options().Converter, b.Options().ContextPropagators, registry)
+	ae := activityengine.NewExecutor(b.Options().Logger, b.Options().Converter, b.Options().ContextPropagators, registry)
 
 	tw := &ActivityTaskWorker{
 		backend:              b,

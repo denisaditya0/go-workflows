@@ -5,13 +5,12 @@ import (
 	"testing"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
+	"github.com/denisaditya0/go-workflows/backend/converter"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/internal/contextvalue"
+	"github.com/denisaditya0/go-workflows/internal/sync"
+	"github.com/denisaditya0/go-workflows/internal/workflowstate"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func Test_createSubWorkflowInstance_NameAsString(t *testing.T) {
@@ -20,7 +19,7 @@ func Test_createSubWorkflowInstance_NameAsString(t *testing.T) {
 	ctx = workflowstate.WithWorkflowState(
 		ctx,
 		workflowstate.NewWorkflowState(
-			core.NewWorkflowInstance("a", ""), slog.Default(), noop.NewTracerProvider().Tracer("test"), clock.New()),
+			core.NewWorkflowInstance("a", ""), slog.Default(), clock.New()),
 	)
 
 	c := sync.NewCoroutine(ctx, func(ctx Context) error {
@@ -43,7 +42,7 @@ func Test_createSubWorkflowInstance_ParamMismatch(t *testing.T) {
 	ctx = workflowstate.WithWorkflowState(
 		ctx,
 		workflowstate.NewWorkflowState(
-			core.NewWorkflowInstance("a", ""), slog.Default(), noop.NewTracerProvider().Tracer("test"), clock.New()),
+			core.NewWorkflowInstance("a", ""), slog.Default(), clock.New()),
 	)
 
 	c := sync.NewCoroutine(ctx, func(ctx Context) error {
@@ -67,7 +66,7 @@ func Test_createSubWorkflowInstance_ReturnMismatch(t *testing.T) {
 	ctx = contextvalue.WithConverter(ctx, converter.DefaultConverter)
 	ctx = workflowstate.WithWorkflowState(
 		ctx,
-		workflowstate.NewWorkflowState(core.NewWorkflowInstance("a", ""), slog.Default(), noop.NewTracerProvider().Tracer("test"), clock.New()),
+		workflowstate.NewWorkflowState(core.NewWorkflowInstance("a", ""), slog.Default(), clock.New()),
 	)
 
 	c := sync.NewCoroutine(ctx, func(ctx Context) error {

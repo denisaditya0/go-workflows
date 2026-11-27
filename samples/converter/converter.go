@@ -9,12 +9,12 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/worker"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/converter"
+	"github.com/denisaditya0/go-workflows/backend/payload"
+	"github.com/denisaditya0/go-workflows/client"
+	"github.com/denisaditya0/go-workflows/samples"
+	"github.com/denisaditya0/go-workflows/worker"
 
 	"github.com/google/uuid"
 )

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/core"
 )
 
 // NewServeMux returns an *http.ServeMux that serves the diagnostics JSON API under

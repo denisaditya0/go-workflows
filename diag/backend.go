@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/core"
 )
 
 // json: serialization in this file needs to be kept in sync with client.ts in the web app

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/denisaditya0/go-workflows/workflow"
 )
 
 // This mirrors apimicro-testing-worker/engine/schema.SourcePropagator: it carries

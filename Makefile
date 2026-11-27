@@ -40,7 +40,7 @@ test-integration:
 # Run Postgres backend tests
 test-postgres:
 	@echo "Running Postgres backend tests..."
-	$(GOTEST) $(TEST_FLAGS) -timeout $(TEST_TIMEOUT) github.com/cschleiden/go-workflows/backend/postgres
+	$(GOTEST) $(TEST_FLAGS) -timeout $(TEST_TIMEOUT) github.com/denisaditya0/go-workflows/backend/postgres
 
 # Run all backend tests
 test-backends: test-postgres

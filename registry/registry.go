@@ -10,8 +10,8 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/common/fn"
+	"github.com/denisaditya0/go-workflows/internal/args"
+	"github.com/denisaditya0/go-workflows/internal/common/fn"
 )
 
 type Registry struct {

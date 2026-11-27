@@ -1,9 +1,9 @@
 # Durable workflows using Go — PostgreSQL-centric fork
 
 > **Fork notice.** This repository is a PostgreSQL-specialized fork of
-> [`cschleiden/go-workflows`](https://github.com/cschleiden/go-workflows), maintained at
+> [`cschleiden/go-workflows`](https://github.com/denisaditya0/go-workflows), maintained at
 > [`denisaditya0/go-workflows`](https://github.com/denisaditya0/go-workflows). The module path is
-> unchanged (`github.com/cschleiden/go-workflows`) and the public workflow/activity API stays
+> unchanged (`github.com/denisaditya0/go-workflows`) and the public workflow/activity API stays
 > compatible with upstream, but the backend story is different: **PostgreSQL is the only backend**,
 > and the storage layer has been extended with Postgres-specific features. See
 > [What's different](#whats-different-from-upstream) below and the
@@ -11,18 +11,18 @@
 
 ## Using this fork
 
-The module path stays `github.com/cschleiden/go-workflows`, so consume the fork with a `replace`
+The module path stays `github.com/denisaditya0/go-workflows`, so consume the fork with a `replace`
 directive (Go 1.26+):
 
 ```go
-require github.com/cschleiden/go-workflows v0.0.0
+require github.com/denisaditya0/go-workflows v0.0.0
 
-replace github.com/cschleiden/go-workflows => github.com/denisaditya0/go-workflows v1.7.0-postgres
+replace github.com/denisaditya0/go-workflows => github.com/denisaditya0/go-workflows v1.7.0-postgres
 ```
 
 Then run `go mod tidy`. Import paths and the workflow/activity API are unchanged.
 
-Borrows heavily from [Temporal](https://github.com/temporalio/temporal), [Cadence](https://github.com/uber/cadence), and [DTFx](https://github.com/Azure/durabletask); this fork tracks [`cschleiden/go-workflows`](https://github.com/cschleiden/go-workflows).
+Borrows heavily from [Temporal](https://github.com/temporalio/temporal), [Cadence](https://github.com/uber/cadence), and [DTFx](https://github.com/Azure/durabletask); this fork tracks [`cschleiden/go-workflows`](https://github.com/denisaditya0/go-workflows).
 
 Upstream background reading:
 - https://cschleiden.dev/blog/2022-02-13-go-workflows-part1/

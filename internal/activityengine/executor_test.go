@@ -7,18 +7,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/common/fn"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/registry"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/converter"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/backend/payload"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/internal/args"
+	"github.com/denisaditya0/go-workflows/internal/common/fn"
+	"github.com/denisaditya0/go-workflows/internal/workflowerrors"
+	"github.com/denisaditya0/go-workflows/registry"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func TestExecutor_ExecuteActivity(t *testing.T) {
@@ -114,7 +113,6 @@ func TestExecutor_ExecuteActivity(t *testing.T) {
 				logger:    slog.Default(),
 				r:         r,
 				converter: converter.DefaultConverter,
-				tracer:    noop.NewTracerProvider().Tracer(""),
 			}
 			got, err := e.ExecuteActivity(context.Background(), &backend.ActivityTask{
 				ID:               uuid.NewString(),

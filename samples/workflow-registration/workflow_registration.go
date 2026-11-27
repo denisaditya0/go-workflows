@@ -5,11 +5,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/registry"
-	"github.com/cschleiden/go-workflows/samples"
-	"github.com/cschleiden/go-workflows/worker"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/client"
+	"github.com/denisaditya0/go-workflows/registry"
+	"github.com/denisaditya0/go-workflows/samples"
+	"github.com/denisaditya0/go-workflows/worker"
 
 	"github.com/google/uuid"
 )

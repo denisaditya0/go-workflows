@@ -12,27 +12,25 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/activityengine"
-	"github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/command"
-	"github.com/cschleiden/go-workflows/internal/common/fn"
-	"github.com/cschleiden/go-workflows/internal/common/log"
-	"github.com/cschleiden/go-workflows/internal/signals"
-	"github.com/cschleiden/go-workflows/internal/workflowengine"
-	"github.com/cschleiden/go-workflows/internal/workflowerrors"
-	"github.com/cschleiden/go-workflows/registry"
-	"github.com/cschleiden/go-workflows/workflow"
-	"github.com/cschleiden/go-workflows/workflow/executor"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/converter"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/backend/metadata"
+	"github.com/denisaditya0/go-workflows/backend/payload"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/internal/activityengine"
+	"github.com/denisaditya0/go-workflows/internal/args"
+	"github.com/denisaditya0/go-workflows/internal/command"
+	"github.com/denisaditya0/go-workflows/internal/common/fn"
+	"github.com/denisaditya0/go-workflows/internal/common/log"
+	"github.com/denisaditya0/go-workflows/internal/signals"
+	"github.com/denisaditya0/go-workflows/internal/workflowengine"
+	"github.com/denisaditya0/go-workflows/internal/workflowerrors"
+	"github.com/denisaditya0/go-workflows/registry"
+	"github.com/denisaditya0/go-workflows/workflow"
+	"github.com/denisaditya0/go-workflows/workflow/executor"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
-	"go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 type testHistoryProvider struct {
@@ -183,8 +181,6 @@ type workflowTester[TResult any] struct {
 
 	logger *slog.Logger
 
-	tracer trace.Tracer
-
 	converter converter.Converter
 
 	propagators []workflow.ContextPropagator
@@ -217,8 +213,6 @@ func NewWorkflowTester[TResult any](workflow workflow.Workflow, opts ...Workflow
 	wfi := core.NewWorkflowInstance(uuid.NewString(), uuid.NewString())
 	registry := registry.New()
 
-	tracer := noop.NewTracerProvider().Tracer("workflow-tester")
-
 	wt := &workflowTester[TResult]{
 		options: options,
 
@@ -245,7 +239,6 @@ func NewWorkflowTester[TResult any](workflow workflow.Workflow, opts ...Workflow
 		timerMode: TM_TimeTravel,
 
 		logger:      options.Logger.With("source", "tester"),
-		tracer:      tracer,
 		converter:   options.Converter,
 		propagators: options.Propagators,
 	}
@@ -364,7 +357,6 @@ func (wt *workflowTester[TResult]) Execute(ctx context.Context, args ...any) {
 				var err error
 				tw.executor, err = workflowengine.NewExecutor(
 					wt.logger,
-					wt.tracer,
 					wt.registry,
 					wt.converter,
 					wt.propagators,
@@ -730,7 +722,7 @@ func (wt *workflowTester[TResult]) scheduleActivity(wfi *core.WorkflowInstance, 
 				)
 			}
 		} else {
-			executor := activityengine.NewExecutor(wt.logger, wt.tracer, wt.converter, wt.propagators, wt.registry)
+			executor := activityengine.NewExecutor(wt.logger, wt.converter, wt.propagators, wt.registry)
 			activityResult, activityErr = executor.ExecuteActivity(context.Background(), &backend.ActivityTask{
 				ID:               uuid.NewString(),
 				WorkflowInstance: wfi,

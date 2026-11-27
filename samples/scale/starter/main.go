@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/samples"
-	scale "github.com/cschleiden/go-workflows/samples/scale"
+	"github.com/denisaditya0/go-workflows/client"
+	"github.com/denisaditya0/go-workflows/samples"
+	scale "github.com/denisaditya0/go-workflows/samples/scale"
 	"github.com/google/uuid"
 )
 

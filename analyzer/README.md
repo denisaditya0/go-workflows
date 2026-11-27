@@ -15,5 +15,5 @@ linters:
     custom:
       goworkflows:
         type: module
-        original-url: github.com/cschleiden/go-workflows/analyzer
+        original-url: github.com/denisaditya0/go-workflows/analyzer
 ```

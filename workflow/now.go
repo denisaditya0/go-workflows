@@ -3,7 +3,7 @@ package workflow
 import (
 	"time"
 
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
+	"github.com/denisaditya0/go-workflows/internal/workflowstate"
 )
 
 // Now returns the current time.

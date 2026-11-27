@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/backend/history"
 	"github.com/stretchr/testify/require"
 )
 

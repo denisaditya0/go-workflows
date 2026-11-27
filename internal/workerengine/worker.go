@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/core"
 )
 
 type TaskWorker[Task, Result any] interface {

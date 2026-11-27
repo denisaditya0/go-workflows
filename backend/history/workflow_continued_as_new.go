@@ -1,6 +1,6 @@
 package history
 
-import "github.com/cschleiden/go-workflows/backend/payload"
+import "github.com/denisaditya0/go-workflows/backend/payload"
 
 type ExecutionContinuedAsNewAttributes struct {
 	Result payload.Payload `json:"result,omitempty"`

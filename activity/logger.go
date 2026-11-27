@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/cschleiden/go-workflows/internal/activityengine"
+	"github.com/denisaditya0/go-workflows/internal/activityengine"
 )
 
 // Logger returns a logger with the workflow instance this activity is executed for set as default fields

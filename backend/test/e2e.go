@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/worker"
-	"github.com/cschleiden/go-workflows/workflow"
-	"github.com/cschleiden/go-workflows/workflow/executor"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/client"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/internal/sync"
+	"github.com/denisaditya0/go-workflows/worker"
+	"github.com/denisaditya0/go-workflows/workflow"
+	"github.com/denisaditya0/go-workflows/workflow/executor"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -650,7 +650,6 @@ func EndToEndBackendTest(t *testing.T, setup func(options ...backend.BackendOpti
 	tests = append(tests, e2eQueueTests...)
 	tests = append(tests, e2eRemovalTests...)
 	tests = append(tests, e2eContinueAsNewTests...)
-	tests = append(tests, e2eTracingTests...)
 
 	run := func(suffix string, workerOptions worker.Options) {
 		for _, tt := range tests {

@@ -3,17 +3,14 @@ package workflow
 import (
 	"fmt"
 
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/core"
-	a "github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/command"
-	"github.com/cschleiden/go-workflows/internal/common/fn"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/sync"
-	"github.com/cschleiden/go-workflows/internal/tracing"
-
-	// "github.com/cschleiden/go-workflows/internal/tracing"
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
+	"github.com/denisaditya0/go-workflows/backend/metadata"
+	"github.com/denisaditya0/go-workflows/core"
+	a "github.com/denisaditya0/go-workflows/internal/args"
+	"github.com/denisaditya0/go-workflows/internal/command"
+	"github.com/denisaditya0/go-workflows/internal/common/fn"
+	"github.com/denisaditya0/go-workflows/internal/contextvalue"
+	"github.com/denisaditya0/go-workflows/internal/sync"
+	"github.com/denisaditya0/go-workflows/internal/workflowstate"
 )
 
 type SubWorkflowOptions struct {
@@ -96,9 +93,6 @@ func createSubWorkflowInstance[TResult any](ctx Context, options SubWorkflowOpti
 		return f
 	}
 
-	tracer := workflowstate.WorkflowState(ctx).Tracer()
-	workflowSpanID := tracing.GetNewSpanID(tracer)
-
 	cmd := command.NewScheduleSubWorkflowCommand(
 		scheduleEventID,
 		wfState.Instance(),
@@ -107,7 +101,6 @@ func createSubWorkflowInstance[TResult any](ctx Context, options SubWorkflowOpti
 		workflowName,
 		inputs,
 		metadata,
-		workflowSpanID,
 	)
 
 	wfState.AddCommand(cmd)

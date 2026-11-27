@@ -42,7 +42,7 @@ linters:
     # custom:
     #   goworkflows:
     #     type: "module"
-    #     original-url: "github.com/cschleiden/go-workflows/analyzer"
+    #     original-url: "github.com/denisaditya0/go-workflows/analyzer"
     #     settings:
     #       checkprivatereturnvalues: true
 
@@ -54,4 +54,4 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - "github.com/cschleiden/go-workflows"
+        - "github.com/denisaditya0/go-workflows"

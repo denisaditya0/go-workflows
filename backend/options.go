@@ -4,21 +4,16 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	mi "github.com/cschleiden/go-workflows/internal/metrics"
-	"github.com/cschleiden/go-workflows/internal/propagators"
-	"github.com/cschleiden/go-workflows/workflow"
-	"go.opentelemetry.io/otel/trace"
-	"go.opentelemetry.io/otel/trace/noop"
+	"github.com/denisaditya0/go-workflows/backend/converter"
+	"github.com/denisaditya0/go-workflows/backend/metrics"
+	mi "github.com/denisaditya0/go-workflows/internal/metrics"
+	"github.com/denisaditya0/go-workflows/workflow"
 )
 
 type Options struct {
 	Logger *slog.Logger
 
 	Metrics metrics.Client
-
-	TracerProvider trace.TracerProvider
 
 	// Converter is the converter to use for serializing and deserializing inputs and results. If not explicitly set
 	// converter.DefaultConverter is used.
@@ -56,12 +51,9 @@ var DefaultOptions Options = Options{
 	WorkflowLockTimeout: time.Minute,
 	ActivityLockTimeout: time.Minute * 2,
 
-	Logger:         slog.Default(),
-	Metrics:        mi.NewNoopMetricsClient(),
-	TracerProvider: noop.NewTracerProvider(),
-	Converter:      converter.DefaultConverter,
-
-	ContextPropagators: []workflow.ContextPropagator{&propagators.TracingContextPropagator{}},
+	Logger:    slog.Default(),
+	Metrics:   mi.NewNoopMetricsClient(),
+	Converter: converter.DefaultConverter,
 
 	RemoveContinuedAsNewInstances: false,
 
@@ -92,14 +84,6 @@ func WithLogger(logger *slog.Logger) BackendOption {
 func WithMetrics(client metrics.Client) BackendOption {
 	return func(o *Options) {
 		o.Metrics = client
-	}
-}
-
-// WithTracerProvider sets a custom OpenTelemetry tracer provider for distributed tracing.
-// If not set, a no-op tracer provider will be used.
-func WithTracerProvider(tp trace.TracerProvider) BackendOption {
-	return func(o *Options) {
-		o.TracerProvider = tp
 	}
 }
 

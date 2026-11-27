@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/diag"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/diag"
 )
 
 var _ diag.Backend = (*postgresBackend)(nil)

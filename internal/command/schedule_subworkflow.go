@@ -2,20 +2,19 @@ package command
 
 import (
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/backend/metadata"
+	"github.com/denisaditya0/go-workflows/backend/payload"
+	"github.com/denisaditya0/go-workflows/core"
 	"github.com/google/uuid"
 )
 
 type ScheduleSubWorkflowCommand struct {
 	cancelableCommand
 
-	Queue          core.Queue
-	Instance       *core.WorkflowInstance
-	Metadata       *metadata.WorkflowMetadata
-	WorkflowSpanID [8]byte
+	Queue    core.Queue
+	Instance *core.WorkflowInstance
+	Metadata *metadata.WorkflowMetadata
 
 	Name   string
 	Inputs []payload.Payload
@@ -25,7 +24,7 @@ var _ CancelableCommand = (*ScheduleSubWorkflowCommand)(nil)
 
 func NewScheduleSubWorkflowCommand(
 	id int64, parentInstance *core.WorkflowInstance, subWorkflowQueue core.Queue, subWorkflowInstanceID,
-	name string, inputs []payload.Payload, metadata *metadata.WorkflowMetadata, workflowSpanID [8]byte,
+	name string, inputs []payload.Payload, metadata *metadata.WorkflowMetadata,
 ) *ScheduleSubWorkflowCommand {
 	if subWorkflowInstanceID == "" {
 		subWorkflowInstanceID = uuid.New().String()
@@ -40,10 +39,9 @@ func NewScheduleSubWorkflowCommand(
 			},
 		},
 
-		Queue:          subWorkflowQueue,
-		Instance:       core.NewSubWorkflowInstance(subWorkflowInstanceID, uuid.NewString(), parentInstance, id),
-		Metadata:       metadata,
-		WorkflowSpanID: workflowSpanID,
+		Queue:    subWorkflowQueue,
+		Instance: core.NewSubWorkflowInstance(subWorkflowInstanceID, uuid.NewString(), parentInstance, id),
+		Metadata: metadata,
 
 		Name:   name,
 		Inputs: inputs,
@@ -77,11 +75,10 @@ func (c *ScheduleSubWorkflowCommand) Execute(clock clock.Clock) *CommandResult {
 						clock.Now(),
 						history.EventType_WorkflowExecutionStarted,
 						&history.ExecutionStartedAttributes{
-							Queue:          c.Queue,
-							Name:           c.Name,
-							Inputs:         c.Inputs,
-							Metadata:       c.Metadata,
-							WorkflowSpanID: c.WorkflowSpanID,
+							Queue:    c.Queue,
+							Name:     c.Name,
+							Inputs:   c.Inputs,
+							Metadata: c.Metadata,
 						},
 					),
 				},

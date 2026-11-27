@@ -7,9 +7,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/postgres"
-	diagtempl "github.com/cschleiden/go-workflows/diag/templ"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/postgres"
+	diagtempl "github.com/denisaditya0/go-workflows/diag/templ"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 

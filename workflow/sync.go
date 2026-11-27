@@ -1,7 +1,7 @@
 package workflow
 
 import (
-	"github.com/cschleiden/go-workflows/internal/sync"
+	"github.com/denisaditya0/go-workflows/internal/sync"
 )
 
 type (

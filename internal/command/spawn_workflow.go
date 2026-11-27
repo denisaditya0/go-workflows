@@ -2,10 +2,10 @@ package command
 
 import (
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/backend/metadata"
-	"github.com/cschleiden/go-workflows/backend/payload"
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/backend/metadata"
+	"github.com/denisaditya0/go-workflows/backend/payload"
+	"github.com/denisaditya0/go-workflows/core"
 	"github.com/google/uuid"
 )
 
@@ -19,10 +19,9 @@ import (
 type SpawnWorkflowCommand struct {
 	command
 
-	Queue          core.Queue
-	Instance       *core.WorkflowInstance
-	Metadata       *metadata.WorkflowMetadata
-	WorkflowSpanID [8]byte
+	Queue    core.Queue
+	Instance *core.WorkflowInstance
+	Metadata *metadata.WorkflowMetadata
 
 	Name   string
 	Inputs []payload.Payload
@@ -35,7 +34,7 @@ var _ Command = (*SpawnWorkflowCommand)(nil)
 // public workflow.SpawnWorkflow API before this command is created.
 func NewSpawnWorkflowCommand(
 	id int64, spawnQueue core.Queue, instanceID string,
-	name string, inputs []payload.Payload, metadata *metadata.WorkflowMetadata, workflowSpanID [8]byte,
+	name string, inputs []payload.Payload, metadata *metadata.WorkflowMetadata,
 ) *SpawnWorkflowCommand {
 	return &SpawnWorkflowCommand{
 		command: command{
@@ -46,9 +45,8 @@ func NewSpawnWorkflowCommand(
 
 		Queue: spawnQueue,
 		// Top-level instance: no parent, fresh execution id captured in history.
-		Instance:       core.NewWorkflowInstance(instanceID, uuid.NewString()),
-		Metadata:       metadata,
-		WorkflowSpanID: workflowSpanID,
+		Instance: core.NewWorkflowInstance(instanceID, uuid.NewString()),
+		Metadata: metadata,
 
 		Name:   name,
 		Inputs: inputs,
@@ -70,11 +68,10 @@ func (c *SpawnWorkflowCommand) Execute(clock clock.Clock) *CommandResult {
 						clock.Now(),
 						history.EventType_WorkflowExecutionStarted,
 						&history.ExecutionStartedAttributes{
-							Queue:          c.Queue,
-							Name:           c.Name,
-							Inputs:         c.Inputs,
-							Metadata:       c.Metadata,
-							WorkflowSpanID: c.WorkflowSpanID,
+							Queue:    c.Queue,
+							Name:     c.Name,
+							Inputs:   c.Inputs,
+							Metadata: c.Metadata,
 						},
 					),
 				},

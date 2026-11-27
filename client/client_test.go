@@ -8,16 +8,15 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/converter"
-	"github.com/cschleiden/go-workflows/backend/history"
-	"github.com/cschleiden/go-workflows/core"
-	"github.com/cschleiden/go-workflows/internal/metrics"
-	"github.com/cschleiden/go-workflows/workflow"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/converter"
+	"github.com/denisaditya0/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/internal/metrics"
+	"github.com/denisaditya0/go-workflows/workflow"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func Test_Client_CreateWorkflowInstance_ParamMismatch(t *testing.T) {
@@ -46,7 +45,6 @@ func Test_Client_CreateWorkflowInstance_NameGiven(t *testing.T) {
 
 	b := &backend.MockBackend{}
 	b.On("Options").Return(backend.ApplyOptions(backend.WithConverter(converter.DefaultConverter), backend.WithLogger(slog.Default())))
-	b.On("Tracer").Return(noop.NewTracerProvider().Tracer("test"))
 	b.On("Metrics").Return(metrics.NewNoopMetricsClient())
 	b.On("CreateWorkflowInstance", mock.Anything, mock.Anything, mock.MatchedBy(func(event *history.Event) bool {
 		if event.Type != history.EventType_WorkflowExecutionStarted {
@@ -77,7 +75,6 @@ func Test_Client_GetWorkflowResultTimeout(t *testing.T) {
 	ctx := context.Background()
 
 	b := &backend.MockBackend{}
-	b.On("Tracer").Return(noop.NewTracerProvider().Tracer("test"))
 	b.On("GetWorkflowInstanceState", mock.Anything, instance).Return(core.WorkflowInstanceStateActive, nil)
 
 	c := &Client{
@@ -101,7 +98,6 @@ func Test_Client_GetWorkflowResultSuccess(t *testing.T) {
 	r, _ := converter.DefaultConverter.To(42)
 
 	b := &backend.MockBackend{}
-	b.On("Tracer").Return(noop.NewTracerProvider().Tracer("test"))
 	b.On("GetWorkflowInstanceState", mock.Anything, instance).Return(core.WorkflowInstanceStateActive, nil).Once().Run(func(args mock.Arguments) {
 		// After the first call, advance the clock to immediately go to the second call below
 		mockClock.Add(time.Second)
@@ -134,7 +130,6 @@ func Test_Client_SignalWorkflow(t *testing.T) {
 
 	b := &backend.MockBackend{}
 	b.On("Options").Return(backend.ApplyOptions(backend.WithConverter(converter.DefaultConverter), backend.WithLogger(slog.Default())))
-	b.On("Tracer").Return(noop.NewTracerProvider().Tracer("test"))
 	b.On("SignalWorkflow", mock.Anything, instanceID, mock.MatchedBy(func(event *history.Event) bool {
 		return event.Type == history.EventType_SignalReceived &&
 			event.Attributes.(*history.SignalReceivedAttributes).Name == "test"
@@ -162,7 +157,6 @@ func Test_Client_SignalWorkflow_WithArgs(t *testing.T) {
 
 	b := &backend.MockBackend{}
 	b.On("Options").Return(backend.ApplyOptions(backend.WithConverter(converter.DefaultConverter), backend.WithLogger(slog.Default())))
-	b.On("Tracer").Return(noop.NewTracerProvider().Tracer("test"))
 	b.On("SignalWorkflow", mock.Anything, instanceID, mock.MatchedBy(func(event *history.Event) bool {
 		return event.Type == history.EventType_SignalReceived &&
 			event.Attributes.(*history.SignalReceivedAttributes).Name == "test" &&

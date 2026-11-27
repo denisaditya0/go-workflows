@@ -68,10 +68,6 @@ Shows how to implement and call a sub-workflow from a workflow.
 
 Shows how to use timers in workflows.
 
-## Tracing
-
-Shows how to use OpenTelemetry to trace workflows and activities.
-
 ## Web / Diagnostic UI
 
 Shows how to use the Web UI to monitor workflows and activities.

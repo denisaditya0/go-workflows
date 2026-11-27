@@ -1,6 +1,6 @@
 package workflow
 
-import "github.com/cschleiden/go-workflows/internal/sync"
+import "github.com/denisaditya0/go-workflows/internal/sync"
 
 type Channel[T any] interface {
 	// Send sends a value to the channel. If the channel is closed, this will panic.

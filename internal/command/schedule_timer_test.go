@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/benbjohnson/clock"
-	"github.com/cschleiden/go-workflows/backend/history"
+	"github.com/denisaditya0/go-workflows/backend/history"
 	"github.com/stretchr/testify/require"
 )
 
@@ -89,7 +89,7 @@ func TestScheduleTimerCommand_StateTransitions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clock := clock.NewMock()
-			cmd := NewScheduleTimerCommand(1, clock.Now().Add(time.Second), "", nil)
+			cmd := NewScheduleTimerCommand(1, clock.Now().Add(time.Second), "")
 
 			tt.f(t, cmd, clock)
 		})

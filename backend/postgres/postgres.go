@@ -1,5 +1,5 @@
 // Package postgres provides a PostgreSQL implementation of the backend.Backend
-// interface defined in github.com/cschleiden/go-workflows/backend.
+// interface defined in github.com/denisaditya0/go-workflows/backend.
 //
 // The implementation is split across several files within this package:
 //   - postgres.go        constructors, lifecycle, migrations, shared helpers
@@ -19,15 +19,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/metrics"
-	"github.com/cschleiden/go-workflows/internal/common/metrickeys"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/metrics"
+	"github.com/denisaditya0/go-workflows/internal/common/metrickeys"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
-	"go.opentelemetry.io/otel/trace"
 )
 
 //go:embed db/migrations/*.sql
@@ -196,10 +195,6 @@ func (pb *postgresBackend) Migrate() error {
 	}
 
 	return nil
-}
-
-func (pb *postgresBackend) Tracer() trace.Tracer {
-	return pb.options.TracerProvider.Tracer(backend.TracerName)
 }
 
 func (pb *postgresBackend) Metrics() metrics.Client {

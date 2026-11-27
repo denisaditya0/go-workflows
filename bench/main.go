@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cschleiden/go-workflows/backend"
-	"github.com/cschleiden/go-workflows/backend/postgres"
-	"github.com/cschleiden/go-workflows/client"
-	"github.com/cschleiden/go-workflows/worker"
+	"github.com/denisaditya0/go-workflows/backend"
+	"github.com/denisaditya0/go-workflows/backend/postgres"
+	"github.com/denisaditya0/go-workflows/client"
+	"github.com/denisaditya0/go-workflows/worker"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 

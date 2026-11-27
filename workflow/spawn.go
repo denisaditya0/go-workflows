@@ -3,13 +3,12 @@ package workflow
 import (
 	"fmt"
 
-	"github.com/cschleiden/go-workflows/core"
-	a "github.com/cschleiden/go-workflows/internal/args"
-	"github.com/cschleiden/go-workflows/internal/command"
-	"github.com/cschleiden/go-workflows/internal/common/fn"
-	"github.com/cschleiden/go-workflows/internal/contextvalue"
-	"github.com/cschleiden/go-workflows/internal/tracing"
-	"github.com/cschleiden/go-workflows/internal/workflowstate"
+	"github.com/denisaditya0/go-workflows/core"
+	a "github.com/denisaditya0/go-workflows/internal/args"
+	"github.com/denisaditya0/go-workflows/internal/command"
+	"github.com/denisaditya0/go-workflows/internal/common/fn"
+	"github.com/denisaditya0/go-workflows/internal/contextvalue"
+	"github.com/denisaditya0/go-workflows/internal/workflowstate"
 )
 
 // SpawnOptions configures a detached, top-level workflow launch via SpawnWorkflow.
@@ -84,9 +83,6 @@ func SpawnWorkflow(ctx Context, options SpawnOptions, wf Workflow, args ...any) 
 		return nil, fmt.Errorf("injecting workflow context: %w", err)
 	}
 
-	tracer := wfState.Tracer()
-	workflowSpanID := tracing.GetNewSpanID(tracer)
-
 	cmd := command.NewSpawnWorkflowCommand(
 		scheduleEventID,
 		options.Queue,
@@ -94,7 +90,6 @@ func SpawnWorkflow(ctx Context, options SpawnOptions, wf Workflow, args ...any) 
 		workflowName,
 		inputs,
 		md,
-		workflowSpanID,
 	)
 
 	wfState.AddCommand(cmd)

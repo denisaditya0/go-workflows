@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cschleiden/go-workflows/core"
+	"github.com/denisaditya0/go-workflows/core"
 )
 
 // StateBadge describes how a workflow instance state is rendered as a badge.
