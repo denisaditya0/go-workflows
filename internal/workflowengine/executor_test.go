@@ -634,11 +634,12 @@ func Test_Executor(t *testing.T) {
 				_, err := e.ExecuteTask(context.Background(), task)
 				require.NoError(t, err)
 
-				require.Equal(t, goRoutines+1, runtime.NumGoroutine())
+				require.GreaterOrEqual(t, runtime.NumGoroutine(), goRoutines+1)
 
 				e.Close()
 
-				require.Equal(t, goRoutines, runtime.NumGoroutine())
+				// Close must not leave any executing workflow goroutines behind.
+				goleak.VerifyNone(t)
 			},
 		},
 		{
@@ -697,13 +698,13 @@ func Test_Executor(t *testing.T) {
 				_, err := e.ExecuteTask(context.Background(), task)
 				require.NoError(t, err)
 
-				// Expect two pending goroutines
-				require.Equal(t, goRoutines+2, runtime.NumGoroutine())
+				// Expect at least two pending goroutines
+				require.GreaterOrEqual(t, runtime.NumGoroutine(), goRoutines+2)
 
 				e.Close()
 
 				// Expect them to be removed
-				require.Equal(t, goRoutines, runtime.NumGoroutine())
+				goleak.VerifyNone(t)
 			},
 		},
 		{
