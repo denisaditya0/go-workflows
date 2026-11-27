@@ -333,7 +333,6 @@ func Test_PostgresBackendWithDB(t *testing.T) {
 	})
 }
 
-
 // Test_PostgresBackend_ConcurrentCreate verifies the fix for the duplicate active
 // instance race (upstream #489): N concurrent CreateWorkflowInstance calls with the
 // same InstanceID must result in exactly one active instance; the rest must fail

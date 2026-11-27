@@ -193,7 +193,6 @@ func Test_Promote_ErrorOnFailure(t *testing.T) {
 	}
 }
 
-
 // Test_Promote_PreviousExecutionID_Continuation verifies that a ContinueAsNew
 // continuation records its predecessor's execution_id in previous_execution_id, while
 // the original run has it null.
@@ -333,7 +332,6 @@ func Test_Promote_PreviousExecutionID_FreshAndSub(t *testing.T) {
 		t.Fatalf("sub-workflow parent_instance_id = %v, expected %q", subParent, wfi.InstanceID)
 	}
 }
-
 
 // Test_Promote_InputSourcedFromColumn is the decisive proof for Phase 2 step 1:
 // it makes instances.input DISAGREE with the attributes blob, then checks which

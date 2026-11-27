@@ -165,7 +165,6 @@ func (w *Worker) RegisterActivity(a workflow.Activity, opts ...registry.Register
 	return w.registry.RegisterActivity(a, opts...)
 }
 
-
 // validateQueues panics if any configured queue name is invalid. Worker
 // construction already panics on internal registration errors, so this keeps the
 // same fail-fast behavior for misconfigured queue names.
