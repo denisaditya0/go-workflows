@@ -27,7 +27,7 @@ It borrows heavily from [Temporal](https://github.com/temporalio/temporal) (and 
 
 This fork of go-workflows uses a single [PostgreSQL](https://www.postgresql.org) backend and adds a durable scheduler for cron and interval triggers alongside the workflow engine.
 
-Background reading on the upstream project this fork is based on:
+Background reading on the upstream project this fork is based on. Read these for concepts, but note that some upstream features are absent here: only PostgreSQL is supported (the SQLite, MySQL, Redis, and in-memory backends are gone), there is no built-in tracing, and storage uses Postgres-specific columns and constraints.
 
 * [https://cschleiden.dev/blog/2022-02-13-go-workflows-part1/](https://cschleiden.dev/blog/2022-02-13-go-workflows-part1/)
 * [https://cschleiden.dev/blog/2022-05-02-go-workflows-part2/](https://cschleiden.dev/blog/2022-05-02-go-workflows-part2/)

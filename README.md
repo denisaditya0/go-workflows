@@ -17,16 +17,12 @@ directive (Go 1.26+):
 ```go
 require github.com/denisaditya0/go-workflows v0.0.0
 
-replace github.com/denisaditya0/go-workflows => github.com/denisaditya0/go-workflows v1.7.0-postgres
+replace github.com/denisaditya0/go-workflows => github.com/denisaditya0/go-workflows v1.9.0
 ```
 
 Then run `go mod tidy`. Import paths and the workflow/activity API are unchanged.
 
-Borrows heavily from [Temporal](https://github.com/temporalio/temporal), [Cadence](https://github.com/uber/cadence), and [DTFx](https://github.com/Azure/durabletask); this fork tracks [`cschleiden/go-workflows`](https://github.com/denisaditya0/go-workflows).
-
-Upstream background reading:
-- https://cschleiden.dev/blog/2022-02-13-go-workflows-part1/
-- https://cschleiden.dev/blog/2022-05-02-go-workflows-part2/
+The workflow model follows [Temporal](https://github.com/temporalio/temporal), [Cadence](https://github.com/uber/cadence), and Azure's [DTFx](https://github.com/Azure/durabletask); this fork is based on [`cschleiden/go-workflows`](https://github.com/cschleiden/go-workflows). See [`docs/background.md`](docs/background.md) for what carries over from upstream and what does not.
 
 ## What's different from upstream
 
@@ -62,10 +58,12 @@ For the full design rationale, roadmap, and the explicit caveats behind these de
 
 ## Docs
 
-Upstream documentation (API, guide, patterns) applies to the workflow/activity programming model:
-http://cschleiden.github.io/go-workflows. Fork-specific backend behavior, design decisions, and
-release notes are documented in the `docs/` directory and on the
-[releases page](https://github.com/denisaditya0/go-workflows/releases).
+Fork-specific backend behavior, design decisions, the scheduler, and release
+notes live in the `docs/` directory and on the
+[releases page](https://github.com/denisaditya0/go-workflows/releases). Start
+with [`docs/tutorial.md`](docs/tutorial.md) for a hands-on walkthrough from
+concepts to working code. For upstream background and references — and a note on
+which upstream features are absent here — see [`docs/background.md`](docs/background.md).
 
 ## Simple example
 
