@@ -25,9 +25,9 @@ go-workflows is an embedded engine for orchestrating long running processes or "
 
 It borrows heavily from [Temporal](https://github.com/temporalio/temporal) (and since it's a fork also [Cadence](https://github.com/uber/cadence)) as well as Azure's [Durable Task Framework (DTFx)](https://github.com/Azure/durabletask). Workflows are written in plain Go.
 
-This fork of go-workflows uses a single [PostgreSQL](https://www.postgresql.org) backend.
+This fork of go-workflows uses a single [PostgreSQL](https://www.postgresql.org) backend and adds a durable scheduler for cron and interval triggers alongside the workflow engine.
 
-See also the following blog posts:
+Background reading on the upstream project this fork is based on:
 
 * [https://cschleiden.dev/blog/2022-02-13-go-workflows-part1/](https://cschleiden.dev/blog/2022-02-13-go-workflows-part1/)
 * [https://cschleiden.dev/blog/2022-05-02-go-workflows-part2/](https://cschleiden.dev/blog/2022-05-02-go-workflows-part2/)

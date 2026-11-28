@@ -1,7 +1,9 @@
 # Fix: duplicate active instances under concurrent CreateWorkflowInstance
 
-Status: **Design note** (upstream issue cschleiden/go-workflows#489). Verified against
-this fork's code. No code changed yet.
+Status: **Implemented.** The unique partial index ships in migration
+`000002_unique_active_instance.up.sql`, and `createInstance`
+(`backend/postgres/instances.go`) relies on it (unique-violation →
+`backend.ErrInstanceAlreadyExists`).
 
 ## Problem (confirmed in this fork)
 

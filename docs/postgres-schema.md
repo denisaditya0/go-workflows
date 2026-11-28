@@ -1,7 +1,8 @@
 # Configurable PostgreSQL Schema — Design & Change List
 
-Status: **Proposal** (no code changed yet)
-Branch target: `feature-postgres`
+Status: **Implemented.** `WithSchema` is available on both Postgres
+constructors (`backend/postgres/options.go`); schema creation and `search_path`
+pinning live in `backend/postgres/postgres.go`.
 
 ## Problem
 
@@ -55,7 +56,7 @@ same schema. This is minimal and keeps all existing SQL untouched.
 Rejected — Approach B (schema-qualify every table name in Go): large, error-prone
 diff with no advantage over A.
 
-## Change list
+## Change list (as implemented)
 
 ### 1. `backend/postgres/options.go`
 - Add a `Schema string` field to the `options` struct.

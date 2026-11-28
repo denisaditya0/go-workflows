@@ -15,6 +15,7 @@ import (
 	"github.com/denisaditya0/go-workflows/backend"
 	"github.com/denisaditya0/go-workflows/backend/history"
 	"github.com/denisaditya0/go-workflows/backend/metrics"
+	"github.com/denisaditya0/go-workflows/backend/payload"
 	"github.com/denisaditya0/go-workflows/core"
 	a "github.com/denisaditya0/go-workflows/internal/args"
 	"github.com/denisaditya0/go-workflows/internal/common/fn"
@@ -70,6 +71,18 @@ func (c *Client) CreateWorkflowInstance(ctx context.Context, options WorkflowIns
 	inputs, err := a.ArgsToInputs(c.backend.Options().Converter, args...)
 	if err != nil {
 		return nil, fmt.Errorf("converting arguments: %w", err)
+	}
+
+	return c.CreateWorkflowInstanceWithInputs(ctx, options, workflowName, inputs)
+}
+
+// CreateWorkflowInstanceWithInputs creates a new workflow instance using inputs
+// that have already been converted with the backend's converter. It is used by
+// components such as the scheduler, which persist encoded inputs and must not
+// re-encode them (re-encoding an `any` value can change its representation).
+func (c *Client) CreateWorkflowInstanceWithInputs(ctx context.Context, options WorkflowInstanceOptions, workflowName string, inputs []payload.Payload) (*workflow.Instance, error) {
+	if workflowName == "" {
+		return nil, errors.New("workflow name must not be empty")
 	}
 
 	if err := core.ValidateInstanceID(options.InstanceID); err != nil {

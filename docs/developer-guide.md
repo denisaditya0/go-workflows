@@ -7,7 +7,7 @@ Postgres-only fork's layout. For *how execution works* (the flow/replay model), 
 ## The layering rule (one direction)
 
 ```
-public API        workflow/  activity/  client/  worker/  (+ workflow/executor contract)
+public API        workflow/  activity/  client/  worker/  scheduler/  (+ workflow/executor contract)
    │ depends on
 internal engine   internal/{workflowengine, activityengine, workerengine, systemworkflows,
    │                        command, workflowstate, sync, tracing, propagators, contextvalue,
@@ -29,9 +29,10 @@ Rules:
 | Package | Role |
 |---|---|
 | `backend` | The `Backend` interface (contract). |
-| `backend/postgres` | The only backend impl. Split: `postgres.go` (ctor/migrate), `instances.go`, `workflow_tasks.go`, `activity_tasks.go`, `events.go`, `diagnostics.go`, `stats.go`. |
+| `backend/postgres` | The only backend impl. Split: `postgres.go` (ctor/migrate), `instances.go`, `workflow_tasks.go`, `activity_tasks.go`, `events.go`, `schedules.go`, `diagnostics.go`, `stats.go`. |
 | `client` | Control plane: create/signal/cancel/query workflows. |
 | `worker` | Public worker + options; assembles the internal workers. |
+| `scheduler` | Durable cron/interval scheduler: management API, cron parser, and the claim/advance loop. Works against `backend.ScheduleStore`. |
 | `workflow` | Workflow authoring API (deterministic primitives). |
 | `activity` | Activity authoring helpers (`Logger`, `Attempt`). |
 | `workflow/executor` | **Public contract** for the executor: `WorkflowExecutor`, `ExecutionResult`, `Cache`, `WorkflowHistoryProvider`. |
@@ -51,6 +52,8 @@ Rules:
 | `internal/args`, `internal/common/fn` | Reflection helpers for function args/names. |
 | `internal/common/log`, `internal/common/metrickeys`, `internal/metrics` | Logging keys, metric names, metrics client. |
 | `diag` | Diagnostics/introspection (+ web UI). |
+
+The `schedules` table is created by migration `000006_schedules`; its persistence lives in `backend/postgres/schedules.go` and the runtime/management API in `scheduler/`.
 
 ## Where to add X
 
@@ -117,10 +120,9 @@ a different worker executes them).
 
 **Why it matters:** tasks are claimed from the shared queue via `SELECT ... FOR UPDATE
 SKIP LOCKED`, so **whichever worker's poller wins** runs the task. If that worker's
-registry lacks the entry, you get `"workflow/activity not found"`. This is the cause of
-upstream issue #464 ("sporadic, Postgres-only"): with multiple competing pollers,
-Postgres surfaces an inconsistency that SQLite's serialized access hid. It is **not** a
-backend bug — it is a worker/queue/registry misconfiguration.
+registry lacks the entry, you get `"workflow/activity not found"`. With multiple
+competing pollers this surfaces as an apparently sporadic failure — it is **not** a
+backend bug, it is a worker/queue/registry misconfiguration.
 
 **Do:**
 - One worker per queue (or a consistent set), each registering everything for its

@@ -6,7 +6,7 @@ For now this library is in a pre-release state. There are no guarantees given re
 
 ## Workflow versioning
 
-For now, I've intentionally left out versioning. Cadence, Temporal, and DTFx all support the concept of versions for workflows as well as activities. This is mostly required when you make changes to workflows and need to keep backwards compatibility with workflows that are being executed at the time of the upgrade.
+For now, versioning is intentionally not supported. Cadence, Temporal, and DTFx all support the concept of versions for workflows as well as activities. This is mostly required when you make changes to workflows and need to keep backwards compatibility with workflows that are being executed at the time of the upgrade.
 
 **Example**: when you change a workflow from:
 
@@ -79,6 +79,6 @@ In addition to side-by-side deployments, you can use [Queues](#queues) to route 
 
 ## How to safely upgrade?
 
-All backend implementations have limited support for migrations which by default are automatically executed when a backend is started. This generally assumes only a single running worker. If you use multiple workers, you need to synchronize migration execution yourself.
+The Postgres backend has limited support for migrations, which by default are automatically executed when the backend is started. This generally assumes only a single running worker. If you use multiple workers, you need to synchronize migration execution yourself.
 
 In general, the guidance is to rely on **side-by-side** deployments. See also the previous section about workflow versioning.

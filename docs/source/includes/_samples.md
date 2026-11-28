@@ -16,9 +16,17 @@ Demonstrates how to pass complex parameters to workflows and activities.
 
 Demonstrates how to run multiple activities concurrently.
 
+## Concurrent (errgroup)
+
+Runs activities concurrently and collects their results with `golang.org/x/sync/errgroup`.
+
 ## Context Propagation
 
 Shows how to propagate context into workflows and from there to activities.
+
+## Dummy Worker
+
+A standalone worker seeded with realistic data (traces, sub-workflows, failures) intended to exercise the diagnostics web UI without running a real workload.
 
 ## Continue-As-New
 
@@ -39,6 +47,14 @@ Demonstrates sub-workflow and activity retries.
 ## Queues
 
 Shows how to queue workflows and activities to different queues and how to create workers that only listen for specific queues or specific tasks (workflows or activities).
+
+## Orchestrator
+
+Uses `worker.NewWorkflowOrchestrator` to combine a worker and client in a single component for simple, single-process scenarios.
+
+## Scheduler
+
+Creates durable interval and cron schedules and runs the scheduler loop embedded in a worker. `docs/scheduler.md` describes the standalone mode as well.
 
 ## Scale
 
@@ -71,3 +87,11 @@ Shows how to use timers in workflows.
 ## Web / Diagnostic UI
 
 Shows how to use the Web UI to monitor workflows and activities.
+
+## Workflow Info
+
+Shows how to read workflow information such as the current history length via `workflow.InstanceExecutionDetails`.
+
+## Workflow Registration
+
+Shows how to register workflows and activities with custom names and options, and how the tester resolves registered names.

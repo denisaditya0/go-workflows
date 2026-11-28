@@ -1,7 +1,7 @@
 # Durable workflows using Go — PostgreSQL-centric fork
 
 > **Fork notice.** This repository is a PostgreSQL-specialized fork of
-> [`cschleiden/go-workflows`](https://github.com/denisaditya0/go-workflows), maintained at
+> [`cschleiden/go-workflows`](https://github.com/cschleiden/go-workflows), maintained at
 > [`denisaditya0/go-workflows`](https://github.com/denisaditya0/go-workflows). The module path is
 > unchanged (`github.com/denisaditya0/go-workflows`) and the public workflow/activity API stays
 > compatible with upstream, but the backend story is different: **PostgreSQL is the only backend**,
@@ -52,6 +52,9 @@ feature-rich PostgreSQL backend.
   non-`public` Postgres schema.
 - **Correctness fixes carried from upstream issues.** int64 precision on `any`-typed decode
   (#471) and tester timer/race fixes (#494, #481).
+- **Durable scheduler.** Cron and fixed-interval schedules live in PostgreSQL and can run
+  embedded in the worker or as a standalone process. See [`scheduler/`](scheduler) and
+  [`docs/scheduler.md`](docs/scheduler.md).
 
 For the full design rationale, roadmap, and the explicit caveats behind these decisions, see
 [`docs/decisions.md`](docs/decisions.md), [`docs/architecture.md`](docs/architecture.md), and

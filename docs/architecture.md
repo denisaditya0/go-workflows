@@ -18,6 +18,7 @@ processing tasks), and all control flows *downward* into the backend.
 | **Registry** | `registry` | Name → Go function lookup, so the worker knows which function a task refers to. |
 | **Workflow executor** | `workflow/executor` | The engine that replays history and advances a workflow function deterministically. |
 | **Orchestrator** | `worker.WorkflowOrchestrator` | Convenience combo of Worker + Client + shared Registry for single-process use. |
+| **Scheduler** | `scheduler` | Durable cron/interval triggers. Polls the `schedules` table, and creates workflow instances when due. Can run embedded in a worker or standalone. |
 | **Authoring: workflow** | `workflow` | Deterministic primitives for *workflow* code (channels, futures, timers, select, …). |
 | **Authoring: activity** | `activity` | Minimal helpers (`Logger`, `Attempt`) for *activity* code, which is ordinary Go. |
 
@@ -27,8 +28,9 @@ types), `diag` (introspection UI), everything under `internal/` (private engine)
 
 **Where is the "queue"?** It is *inside the backend*. There is no separate queue
 component. In Postgres the queues are tables (`pending_events` for workflow tasks,
-`activities` for activity tasks) and "dequeue" is a `SELECT ... FOR UPDATE SKIP
-LOCKED`. `workflow.Queue` is just a *name/label* used to partition tasks.
+`activities` for activity tasks, `schedules` for due schedule fires) and "dequeue"
+is a `SELECT ... FOR UPDATE SKIP LOCKED`. `workflow.Queue` is just a *name/label*
+used to partition tasks.
 
 ---
 
@@ -148,6 +150,36 @@ worker.Start()
 again** → the executor resolves the activity's future → your workflow code
 continues past `.Get()`. A workflow may cycle through B1 many times, with long
 gaps, until it completes. **That cycle is "the flow."**
+
+---
+
+## Flow C — The scheduler fires a workflow
+
+The scheduler is a **third entry point** (alongside `client` and the worker loop),
+and it too only calls *down* into the backend. It polls for due schedules, claims
+one atomically, and creates an ordinary workflow instance — which then flows through
+A/B above like any other workflow.
+
+```
+ scheduler (embedded in a worker, or its own process)
+   └─> backend.ClaimDueSchedules(now, leaseUntil, batch)   // FOR UPDATE SKIP LOCKED
+         └─> returns due schedules, now leased
+   └─> client.CreateWorkflowInstance(...)                  // the same write path as Flow A
+         └─> INSERT instance + WorkflowExecutionStarted event
+   └─> backend.AdvanceSchedule(id, expectedNextRunAt, ...) // CAS on next_run_at
+```
+
+- **Lease** makes it safe to run many scheduler processes: only the process that
+  claimed a schedule fires that occurrence; a crashed process's lease expires and
+  another retries.
+- **Advance is a compare-and-swap** on `next_run_at`, so a second process racing on
+  the same occurrence cannot double-advance it.
+- **Instance IDs are deterministic** (`<scheduleID>-<base36 unixNano>`), so a
+  post-crash retry is idempotent.
+- The scheduler never executes workflow code itself; it just produces instances.
+  The created workflow still needs a worker that has registered it.
+
+See `docs/scheduler.md` for the user-facing reference.
 
 ---
 

@@ -6,6 +6,8 @@ This repository provides a single backend implementation backed by **PostgreSQL*
 - `WithWorkflowLockTimeout(timeout time.Duration)` - Set the timeout for workflow task locks. Defaults to 1 minute
 - `WithActivityLockTimeout(timeout time.Duration)` - Set the timeout for activity task locks. Defaults to 2 minutes
 - `WithLogger(logger *slog.Logger)` - Set the logger implementation
+- `WithWorkerName(name string)` - Set the worker name recorded on workflow instances. Defaults to `"worker-"` + a generated ID
+- `WithMaxHistorySize(size int64)` - Set the maximum size of a workflow history. A workflow that exceeds it is failed. Defaults to `10000`
 - `WithMetrics(client metrics.Client)` - Set the metrics client
 - `WithConverter(converter converter.Converter)` - Provide a custom `Converter` implementation
 - `WithContextPropagator(prop workflow.ContextPropagator)` - Adds a custom context propagator
@@ -54,6 +56,9 @@ See `backend/postgres/db/migrations` for the schema and migrations. Main tables:
 - `history` - History for workflow instances
 - `activities` - Queue of pending activities
 - `attributes` - Payloads of events
+- `schedules` - Durable cron/interval triggers read by the scheduler (`backend.ScheduleStore`)
+
+The PostgreSQL backend also implements `backend.ScheduleStore`, which the `scheduler` package uses to persist and claim schedules. Backends that do not implement it cannot host a scheduler.
 
 
 ## Custom implementation

@@ -18,6 +18,7 @@ import (
 	"github.com/denisaditya0/go-workflows/internal/systemworkflows"
 	internal "github.com/denisaditya0/go-workflows/internal/workerengine"
 	"github.com/denisaditya0/go-workflows/registry"
+	"github.com/denisaditya0/go-workflows/scheduler"
 	"github.com/denisaditya0/go-workflows/workflow"
 )
 
@@ -27,6 +28,8 @@ type Worker struct {
 	registry *registry.Registry
 
 	workers []worker
+
+	scheduler *scheduler.Scheduler
 }
 
 type worker interface {
@@ -45,8 +48,22 @@ func New(backend backend.Backend, options *Options) *Worker {
 	workflowWorker := newWorkflowWorker(backend, registry, &options.WorkflowWorkerOptions)
 	activityWorker := newActivityWorker(backend, registry, &options.ActivityWorkerOptions)
 
+	workers := []worker{workflowWorker, activityWorker}
+
+	var sched *scheduler.Scheduler
+	if options.Scheduler != nil {
+		var err error
+		sched, err = scheduler.New(backend, options.Scheduler)
+		if err != nil {
+			panic(fmt.Errorf("starting built-in scheduler: %w", err))
+		}
+		workers = append(workers, sched)
+	}
+
 	// Register internal activities
-	return newWorker(backend, registry, []worker{workflowWorker, activityWorker})
+	w := newWorker(backend, registry, workers)
+	w.scheduler = sched
+	return w
 }
 
 // NewWorkflowWorker creates a worker that only processes workflows.
@@ -163,6 +180,12 @@ func (w *Worker) RegisterWorkflow(wf workflow.Workflow, opts ...registry.Registe
 // RegisterActivity registers an activity with the worker's registry.
 func (w *Worker) RegisterActivity(a workflow.Activity, opts ...registry.RegisterOption) error {
 	return w.registry.RegisterActivity(a, opts...)
+}
+
+// Scheduler returns the embedded scheduler, or nil if the worker was created
+// without one. It can be used to manage schedules from the same process.
+func (w *Worker) Scheduler() *scheduler.Scheduler {
+	return w.scheduler
 }
 
 // validateQueues panics if any configured queue name is invalid. Worker

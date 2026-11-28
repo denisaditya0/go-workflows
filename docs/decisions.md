@@ -9,7 +9,7 @@ Running record of design decisions and findings for the Postgres-only fork.
 workflow/activity inputs, results, and event attributes are JSON bytes stored in
 `bytea` columns (`attributes.data`, `instances.metadata`).
 
-**Why `bytea` upstream.** `bytea` stores arbitrary bytes, so the storage layer is
+**Why `bytea`.** `bytea` stores arbitrary bytes, so the storage layer is
 **serializer-agnostic** — the converter could be JSON, protobuf, or gob. The engine
 never queries inside payloads, so it never needed structured storage.
 
@@ -55,8 +55,7 @@ numeric type (e.g. `int64`) was always lossless and is unaffected.
 value from an `any` result should use `v.(json.Number).Int64()` / `.Float64()`, or —
 preferred — use the **typed** API (`GetWorkflowResult[int64]`,
 `NewSignalChannel[int64]`), which decodes losslessly and avoids `json.Number`
-entirely. This is why upstream has not merged the change; for this JSON-only fork the
-correctness win is worth it.
+entirely. For this JSON-only fork the correctness win is worth it.
 
 ## Schema column limits (varchar) and validation
 
@@ -118,7 +117,7 @@ so they are not lost.
   values must not be reordered (persisted wire format).
 
 
-## Investigation: #464 "sporadic workflow/activity not found" (Postgres)
+## Investigation: "sporadic workflow/activity not found" (Postgres)
 
 **Reproduced** (two workers polling the same queue with separate registries; the
 workflow registered on only one): 20/30 instances failed with "workflow not found" —
@@ -127,8 +126,8 @@ registration failed it.
 
 **Root cause: worker↔queue↔registry inconsistency, NOT the Postgres backend.** The
 queue is shared in the backend; the registry is per-worker. The engine doesn't enforce
-that a worker polling a queue has registered what's routed there. Postgres (real
-multi-poller concurrency) exposes the inconsistency SQLite serialized away.
+that a worker polling a queue has registered what's routed there. Real multi-poller
+concurrency (the only mode this fork supports) exposes the inconsistency immediately.
 
 **Done:** documented the contract in `developer-guide.md` (worker must register
 everything for the queues it polls; see `samples/queues`), which already demonstrates
@@ -203,11 +202,11 @@ Scope / notes for later:
 - Candidate new features: stuck-workflow view (ties to #381), per-queue dashboards,
   retention/cleanup controls, re-run/terminate actions (ties to #196).
 
-## Roadmap: built-in schedules (durable timer-based cron/interval)
+## Built-in schedules (durable cron/interval) — implemented
 
-Goal: replace the external cron package in the app worker with scheduling built into
-the engine, using the durable timer (`ScheduleTimer`/`Sleep` → persisted `visible_at`)
-so recurrence survives restarts — no separate cron library.
+Goal: replace an external cron package in the app worker with scheduling built into
+the engine, so recurrence survives restarts. See `docs/scheduler.md` for the user
+reference and `scheduler/` for the implementation.
 
 ### Reference designs (how the big engines do it)
 
@@ -221,55 +220,46 @@ so recurrence survives restarts — no separate cron library.
 - **Durable periodic jobs** (run times persisted, guaranteed across restart/election)
   are **River Pro (paid)**. So DB-backed durability is the paid differentiator.
 - Overlap: combine periodic + **unique jobs** (e.g. a 24h unique interval) so a
-  duplicate isn't enqueued while one is pending — same idea as our SingletonCron
-  dedup.
+  duplicate isn't enqueued while one is pending.
 
 **Temporal / Cadence (schedules as first-class objects):**
 - A Schedule is a durable server-side object (created once with a cron/interval +
   target workflow); Cadence runs "a durable internal scheduler workflow that fires
-  your target on each tick, surviving restarts" — i.e. a self-driving workflow, the
-  same pattern available to us.
+  your target on each tick, surviving restarts".
 - **Overlap policy** (what to do if the previous run is still going): `Skip` (default),
   `BufferOne`, `BufferAll`, `CancelOther`, `TerminateOther`, `AllowAll`.
 - **Catchup window**: after downtime, which missed ticks to run (bounded) vs skip.
 - Lifecycle: pause/unpause, update, backfill, inspect — without touching workflow code.
 
-### How it maps to this fork (compose existing primitives)
+### Design chosen for this fork
 
-The engine already has the pieces: durable timer (`workflow.Sleep`), `ContinueAsNew`,
-`SpawnWorkflow`, and SingletonCron-style dedup. A scheduler is a **self-rescheduling
-workflow**:
+Schedules are **durable rows**, not a self-rescheduling workflow. Each schedule
+lives in a `schedules` table and stores its own `next_run_at`, so recurrence does not
+depend on any single workflow execution surviving (no `ContinueAsNew`-based loop to
+cope with). This mirrors River's durable tier and Temporal's Schedule object, and it
+lets the scheduler run **embedded** in a worker or **standalone** in its own process.
 
-```
-Scheduler(ctx, spec):
-    next := nextFire(spec, workflow.Now(ctx))   // DETERMINISTIC (replay-safe clock!)
-    workflow.Sleep(ctx, next.Sub(workflow.Now(ctx)))
-    spawn/trigger the target workflow (deterministic instance id per tick)
-    workflow.ContinueAsNew(ctx, spec)            // reschedule
-```
+| Concern | Decision |
+|---|---|
+| Trigger types | Fixed `Interval` **and** cron (5/6 fields + `@macro`s). Cron is parsed by a small dependency-free parser in `scheduler/cron.go`. |
+| Durability | Trigger state (`next_run_at`, `last_run_at`, `num_fired`) is persisted. A fire creates a normal workflow instance. |
+| Multi-process safety | `ClaimDueSchedules` leases rows with `SELECT ... FOR UPDATE SKIP LOCKED`; `AdvanceSchedule` is a compare-and-swap on `next_run_at`. Deterministic instance IDs (`<scheduleID>-<base36 unixNano>`) make a post-crash retry idempotent. |
+| Overlap | `OverlapSkip` (default) / `OverlapAllow`. |
+| Catch-up | `CatchupNone` (default) / `CatchupAll` (one missed occurrence per tick, in order). |
+| Lifecycle | `Create`/`Update`/`Delete`/`Get`/`List`/`Pause`/`Resume`/`Trigger` on `*scheduler.Scheduler`. |
+| Determinism note | Next-fire calculation uses the wall clock (`clock.Clock`), **not** `workflow.Now`, because the scheduler runs outside workflow code. This is safe: the engine only sees the resulting instance/schedule state. |
+| Multi-replica | Safe by construction: the lease + CAS means any number of scheduler processes can run at once; only one fires a given occurrence. No leader election required. |
 
-Design decisions to make (borrowed from above):
-1. **Schedule type:** start with **interval** (trivial, fully deterministic, no deps);
-   add **cron** via `robfig/cron/v3` (River's exact approach) as step 2.
-2. **Determinism:** `nextFire` must use `workflow.Now(ctx)`, never wall clock. Cron
-   parsing is deterministic; the *next-time* calc must be pinned to the replay clock.
-3. **Overlap policy:** at minimum `Skip` (our SingletonCron dedup already does this via
-   deterministic instance id → duplicate rejected). Consider `BufferOne`/`AllowAll`
-   later.
-4. **Catchup:** decide run-missed-ticks vs skip-to-next after downtime (bounded
-   window), like Temporal's catchupWindow.
-5. **Multi-replica:** needs **leader election** (roadmap prerequisite) so only one
-   scheduler drives recurrence. Single-replica (current) doesn't.
-6. **Durability tier:** our timer is already durable (persisted `visible_at`), so we
-   get "durable periodic" for free — the thing River charges for. Good fork win.
+Public surface: `backend.Schedule`, `backend.ScheduleStore` (implemented by the
+Postgres backend), and the `scheduler` package (`New`, `Start`/`Stop`,
+management methods, `ScheduleSpec`). Workers opt in with `worker.WithScheduler(...)`
+and can expose the embedded scheduler via `w.Scheduler()`.
 
-### Plan
-- **Phase 1 (app-layer, no engine change):** a generic `Scheduler` workflow + helper
-  (interval first, then `robfig/cron`), using Sleep + ContinueAsNew + dedup. Replaces
-  the external cron package.
-- **Phase 2:** overlap policies + catchup window; pause/update as signals.
-- **Phase 3:** leader election for multi-replica (shared with other maintenance
-  services).
+### Migration path
+
+- Migration `000006_schedules` adds the table plus the partial due-index.
+- An app-level external cron can be retired by creating a `Schedule` per cron entry;
+the scheduler loop takes over firing.
 
 ## Roadmap: denormalize initial input + final result onto `instances`
 

@@ -3,6 +3,7 @@ package worker
 import (
 	"time"
 
+	"github.com/denisaditya0/go-workflows/scheduler"
 	"github.com/denisaditya0/go-workflows/workflow"
 	"github.com/denisaditya0/go-workflows/workflow/executor"
 )
@@ -51,6 +52,11 @@ type WorkflowWorkerOptions struct {
 type Options struct {
 	WorkflowWorkerOptions
 	ActivityWorkerOptions
+
+	// Scheduler, when set, runs a scheduler polling loop alongside the worker. The
+	// loop creates workflow instances for due schedules persisted in the backend.
+	// Backends that do not implement backend.ScheduleStore cannot run a scheduler.
+	Scheduler *scheduler.Options
 
 	// SingleWorkerMode enables optimizations for scenarios where only a single worker
 	// is processing tasks. This should only be enabled when you have exactly one worker
@@ -110,4 +116,13 @@ var DefaultOptions = Options{
 
 	// By default, SingleWorkerMode is disabled
 	SingleWorkerMode: false,
+}
+
+// WithScheduler returns a copy of DefaultOptions with a built-in scheduler enabled.
+// Use it with worker.New to run the scheduler alongside the workflow and activity
+// workers without losing the defaults for the other worker options.
+func WithScheduler(options *scheduler.Options) *Options {
+	opts := DefaultOptions
+	opts.Scheduler = options
+	return &opts
 }

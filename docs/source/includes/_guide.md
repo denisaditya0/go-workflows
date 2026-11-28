@@ -131,20 +131,20 @@ func Workflow2(ctx workflow.Context, msg string) (string, error) {
 			ctx := workflow.NewDisconnectedContext(ctx)
 
 			// Execute the cleanup activity
-			if err := workflow.ExecuteActivity(ctx, ActivityCleanup).Get(ctx, nil); err != nil {
-				return errors.Wrap(err, "could not perform cleanup")
+			if err := workflow.ExecuteActivity[any](ctx, workflow.DefaultActivityOptions, ActivityCleanup).Get(ctx); err != nil {
+				logger.Error("could not perform cleanup", "err", err)
 			}
 		}
 	}()
 
-	r1, err := workflow.ExecuteActivity[int](ctx, ActivityCancel, 1, 2).Get(ctx)
+	r1, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, ActivityCancel, 1, 2).Get(ctx)
 	if err != nil {  // <---- Workflow is canceled while this activity is running
 		return errors.Wrap(err, "could not get ActivityCancel result")
 	}
 
 	// r1 will contain the result of ActivityCancel
 	// ⬇ ActivitySkip will be skipped immediately
-	r2, err := workflow.ExecuteActivity(ctx, ActivitySkip, 1, 2).Get(ctx)
+	r2, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, ActivitySkip, 1, 2).Get(ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not get ActivitySkip result")
 	}
@@ -239,7 +239,7 @@ Canceling activities is not supported at this time.
 
 ```go
 t := workflow.ScheduleTimer(ctx, 2*time.Second)
-err := t.Get(ctx, nil)
+_, err := t.Get(ctx)
 ```
 
 You can schedule timers to fire at any point in the future by calling `workflow.ScheduleTimer`. It returns a `Future` you can await to wait for the timer to fire.
@@ -288,7 +288,7 @@ func Workflow(ctx workflow.Context) error {
 }
 ```
 
-Signals are a way to send a message to a running workflow instance. You can send a signal to a workflow by calling `workflow.Signal` and listen to them by creating a `SignalChannel` via `NewSignalChannel`.
+Signals are a way to send a message to a running workflow instance. You send a signal with `client.SignalWorkflow` (or `workflow.SignalWorkflow` from inside another workflow) and receive them with a `SignalChannel` created via `NewSignalChannel`.
 
 <aside class="notice">
     Signals can only be delivered to active workflow instances. If a workflow instance has completed, `SignalWorkflow` will return a `backend.ErrInstanceNotFound` error.
@@ -309,7 +309,7 @@ You can also signal a workflow from within another workflow. This is useful if y
 ## Executing side effects
 
 ```go
-id, _ := workflow.SideEffect[string](ctx, func(ctx workflow.Context) string) {
+id, _ := workflow.SideEffect[string](ctx, func(ctx workflow.Context) string {
 	return uuid.NewString()
 }).Get(ctx)
 ```
@@ -320,8 +320,8 @@ Sometimes scheduling an activity is too much overhead for a simple side effect. 
 
 ```go
 func Workflow1(ctx workflow.Context, msg string) error {
-	result, err := workflow.CreateSubWorkflowInstance[int]
-		ctx, workflow.SubWorkflowInstanceOptions{}, SubWorkflow, "some input").Get(ctx)
+	result, err := workflow.CreateSubWorkflowInstance[int](
+		ctx, workflow.SubWorkflowOptions{}, SubWorkflow, "some input").Get(ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not get sub workflow result")
 	}
@@ -332,9 +332,9 @@ func Workflow1(ctx workflow.Context, msg string) error {
 }
 
 func SubWorkflow(ctx workflow.Context, msg string) (int, error) {
-	r1, err := workflow.ExecuteActivity[int](ctx, Activity1, 35, 12).Get(ctx)
+	r1, err := workflow.ExecuteActivity[int](ctx, workflow.DefaultActivityOptions, Activity1, 35, 12).Get(ctx)
 	if err != nil {
-		return "", errors.Wrap(err, "could not get activity result")
+		return 0, errors.Wrap(err, "could not get activity result")
 	}
 
 	logger.Debug("A1 result:", "r1", r1)
@@ -349,8 +349,8 @@ Call `workflow.CreateSubWorkflowInstance` to start a sub-workflow. The returned 
 ### Executing sub-workflows on a specific queue
 
 ```go
-result, err := workflow.CreateSubWorkflowInstance[int]
-	ctx, workflow.SubWorkflowInstanceOptions{
+result, err := workflow.CreateSubWorkflowInstance[int](
+	ctx, workflow.SubWorkflowOptions{
 		Queue: "my-queue",
 	}, SubWorkflow, "some input").Get(ctx)
 if err != nil {
@@ -538,7 +538,7 @@ var f1 workflow.Future[int]
 workflow.Select(
 	ctx,
 	workflow.Await(f1, func (ctx workflow.Context, f Future[int]) {
-		r, err := f.Get(ctx, &r)
+		r, err := f.Get(ctx)
 		// ...
 	}),
 	workflow.Default(ctx, func (ctx workflow.Context) {
@@ -560,7 +560,7 @@ func TestWorkflow(t *testing.T) {
 	tester.OnActivity(Activity2, mock.Anything, mock.Anything, mock.Anything).Return(12, nil)
 
 	// Run workflow with inputs
-	tester.Execute("Hello world")
+	tester.Execute(context.Background(), "Hello world")
 
 	// Workflows always run to completion, or time-out
 	require.True(t, tester.WorkflowFinished())
@@ -624,10 +624,66 @@ if err != nil {
 ### Automatically expiring finished workflow instances
 
 ```go
-client.StartAutoExpiration(ctx context.Context, delay time.Duration)
+err := c.StartAutoExpiration(ctx, 24*time.Hour)
 ```
 
 When you call this on a client, a workflow will be started in the `system` queue that will periodically run and remove finished workflow instances that are older than the specified delay.
+
+## Scheduling workflows
+
+The scheduler adds durable, cron- and interval-driven triggers. A schedule is stored in Postgres; when due it creates a workflow instance, which then runs through the normal worker flow. Because the trigger state lives in the database, the scheduler can run **embedded in a worker** or **standalone** in its own process.
+
+```go
+sched, err := scheduler.New(b, nil) // management only; does not start a loop
+if err != nil {
+	panic(err)
+}
+
+// Fixed interval ("schedule timer")
+_, err = sched.Create(ctx, scheduler.ScheduleSpec{
+	ID:       "cleanup",
+	Workflow: CleanupWorkflow,
+	Interval: 15 * time.Minute,
+})
+
+// Cron expression (5 fields, optional seconds field, or an @macro)
+_, err = sched.Create(ctx, scheduler.ScheduleSpec{
+	ID:       "report-daily",
+	Workflow: ReportWorkflow,
+	Cron:     "0 9 * * mon-fri",
+	TimeZone: "America/New_York",
+})
+```
+
+Exactly one of `Cron` and `Interval` must be set. Cron supports `*`, lists, ranges, steps, month/weekday names, `?`, and the macros `@yearly`, `@monthly`, `@weekly`, `@daily`, `@hourly`, and `@every <duration>`.
+
+Embed the scheduler loop in a worker:
+
+```go
+w := worker.New(b, worker.WithScheduler(&scheduler.Options{
+	PollInterval:  time.Second,
+	LeaseDuration: 30 * time.Second,
+	BatchSize:     50,
+}))
+```
+
+Or run it standalone:
+
+```go
+sched, _ := scheduler.New(b, &scheduler.Options{PollInterval: time.Second})
+if err := sched.Start(ctx); err != nil {
+	panic(err)
+}
+defer sched.Stop()
+```
+
+Management methods on `*scheduler.Scheduler`: `Get`, `List`, `Pause`, `Resume`, `Trigger`, `Delete`. Overlap (`OverlapSkip`/`OverlapAllow`) and catch-up (`CatchupNone`/`CatchupAll`) policies control what happens when the previous run is still active or fires were missed during downtime. Multiple scheduler processes are safe: due schedules are leased before firing, and firing advances `NextRunAt` with a compare-and-swap.
+
+<aside class="notice">
+    Schedules are stored via <code>backend.ScheduleStore</code>. The PostgreSQL backend implements it; <code>scheduler.New</code> returns <code>ErrSchedulesNotSupported</code> for a backend that does not.
+</aside>
+
+See `docs/scheduler.md` for the full reference.
 
 ## Logging
 
