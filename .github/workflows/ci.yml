@@ -44,6 +44,35 @@ jobs:
       - name: Tests
         run: go test -short -timeout 240s -race -count 1 ./...
 
+  test_analyzer:
+    name: Workflow Analyzer Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: analyzer/go.mod
+          check-latest: true
+          cache: true
+          cache-dependency-path: analyzer/go.sum
+
+      - name: Tests
+        working-directory: analyzer
+        run: go test -race -timeout 240s -count 1 ./...
+
+      - name: Build analyzer
+        working-directory: analyzer
+        run: go build -o ../goworkflows ./cmd/goworkflows
+
+      - name: Analyze repository workflows
+        # Excluded on purpose:
+        # - backend/test uses wall-clock sleeps to exercise timing races.
+        # - samples/retries uses a package-level counter to simulate transient
+        #   workflow failures; that is itself a determinism hazard the rule flags.
+        run: ./goworkflows $(go list ./... | grep -v -e '/backend/test' -e '/samples/retries')
+
   test_postgres:
     name: Postgres Backend Tests
     runs-on: ubuntu-latest

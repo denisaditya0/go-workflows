@@ -17,7 +17,7 @@ TEST_FLAGS=-race -count=1 -v
 TEST_SHORT_FLAGS=-short $(TEST_FLAGS)
 
 # Build targets
-.PHONY: all build clean test test-integration test-postgres test-backends lint fmt
+.PHONY: all build clean test test-analyzer test-integration test-postgres test-backends lint fmt
 
 # Default target
 all: build test lint
@@ -36,6 +36,11 @@ test:
 test-integration:
 	@echo "Running all tests..."
 	$(GOTEST) $(TEST_FLAGS) -timeout $(TEST_TIMEOUT) ./...
+
+# Run analyzer tests (the analyzer is a separate Go module)
+test-analyzer:
+	@echo "Running analyzer tests..."
+	cd analyzer && $(GOTEST) $(TEST_FLAGS) -timeout $(TEST_TIMEOUT) ./...
 
 # Run Postgres backend tests
 test-postgres:

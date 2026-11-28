@@ -24,7 +24,18 @@ linters:
     - wastedassign
     - whitespace
     - unused
-    # - goworkflows
+    - goworkflows
+  exclusions:
+    rules:
+      # The timer race test intentionally uses a real time.Sleep.
+      - path: backend/test
+        linters:
+          - goworkflows
+      # This sample deliberately uses a package-level counter to demonstrate
+      # retry behaviour.
+      - path: samples/retries
+        linters:
+          - goworkflows
   disable:
     - errname
     - errcheck
@@ -39,12 +50,10 @@ linters:
         - "-ST1012"
         - "-ST1020"
         - "-SA5010"
-    # custom:
-    #   goworkflows:
-    #     type: "module"
-    #     original-url: "github.com/denisaditya0/go-workflows/analyzer"
-    #     settings:
-    #       checkprivatereturnvalues: true
+    custom:
+      goworkflows:
+        type: "module"
+        original-url: "github.com/denisaditya0/go-workflows/analyzer"
 
 
 formatters:

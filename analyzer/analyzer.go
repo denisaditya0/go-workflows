@@ -3,12 +3,29 @@ package analyzer
 import (
 	"go/ast"
 	"go/types"
+	"strings"
 
 	"github.com/golangci/plugin-module-register/register"
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 )
+
+// Analyzer is the default analyzer with no settings. It can be used by any
+// go/analysis driver, for example singlechecker (`cmd/goworkflows`),
+// `go vet -vettool`, or analysistest.
+var Analyzer = NewAnalyzer(Settings{})
+
+// NewAnalyzer returns an analyzer configured with the given settings.
+func NewAnalyzer(settings Settings) *analysis.Analyzer {
+	return &analysis.Analyzer{
+		Name:      "goworkflows",
+		Doc:       "Checks for common errors when writing workflows",
+		Run:       func(pass *analysis.Pass) (interface{}, error) { return run(pass, settings) },
+		Requires:  []*analysis.Analyzer{inspect.Analyzer},
+		FactTypes: []analysis.Fact{new(IsWorkflowFact)},
+	}
+}
 
 func init() {
 	register.Plugin("goworkflows", New)
@@ -34,85 +51,92 @@ type Settings struct {
 }
 
 func (w *GoWorkflowsPlugin) BuildAnalyzers() ([]*analysis.Analyzer, error) {
-	return []*analysis.Analyzer{
-		{
-			Name:     "goworkflows",
-			Doc:      "Checks for common errors when writing workflows",
-			Run:      w.run,
-			Requires: []*analysis.Analyzer{inspect.Analyzer},
-		},
-	}, nil
+	return []*analysis.Analyzer{NewAnalyzer(w.Settings)}, nil
 }
 
 func (w *GoWorkflowsPlugin) GetLoadMode() string {
-	// NOTE: the mode can be `register.LoadModeSyntax` or `register.LoadModeTypesInfo`.
-	// - `register.LoadModeSyntax`: if the linter doesn't use types information.
-	// - `register.LoadModeTypesInfo`: if the linter uses types information.
-
-	return register.LoadModeSyntax
+	// The analyzer inspects type information (e.g. `pass.TypesInfo`), so it must
+	// load types; `register.LoadModeSyntax` would leave `TypesInfo` empty.
+	return register.LoadModeTypesInfo
 }
 
-func (w *GoWorkflowsPlugin) run(pass *analysis.Pass) (interface{}, error) {
+func run(pass *analysis.Pass, settings Settings) (interface{}, error) {
 	inspector := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
-	// Expect workflows to be top level functions in a file. Therefore it should be enough to just keep track if the current
-	// AST node is a descendant of a workflow FuncDecl.
-	inWorkflow := true
+	// inWorkflow tracks whether the node currently being visited is lexically
+	// part of a workflow. Workflows are functions (named or literals) whose first
+	// parameter is a workflow.Context. Nested function literals inherit the state
+	// of their parent, so helper closures inside a workflow are still checked,
+	// while package-level literals are not.
+	inWorkflow := false
+
+	// litStack records the inWorkflow value before entering each function literal
+	// so that it can be restored when leaving the literal.
+	var litStack []bool
 
 	workflowImportName := "workflow"
+
+	// Registration is the reliable signal that a function is a workflow. When a
+	// package registers at least one workflow, only registered functions and
+	// literals are analyzed; helpers that merely take a workflow.Context are
+	// ignored. Packages that never register anything (for example when the
+	// analyzer is used standalone) fall back to the parameter heuristic.
+	regs := findRegistrations(pass, inspector)
 
 	inspector.Nodes([]ast.Node{
 		(*ast.File)(nil),
 		(*ast.FuncDecl)(nil),
+		(*ast.FuncLit)(nil),
 		(*ast.ImportSpec)(nil),
 		(*ast.RangeStmt)(nil),
 		(*ast.SelectStmt)(nil),
 		(*ast.GoStmt)(nil),
 		(*ast.CallExpr)(nil),
+		(*ast.AssignStmt)(nil),
+		(*ast.IncDecStmt)(nil),
 	}, func(node ast.Node, push bool) bool {
-		if _, ok := node.(*ast.File); ok {
-			// New file, reset state
-			inWorkflow = true
-		}
-
-		if _, ok := node.(*ast.FuncDecl); ok {
-			if !push {
-				// Finished with the current workflow
-				inWorkflow = false
-				return false
-			}
-		} else {
-			if !push {
-				// Only check nodes while descending
-				return false
-			}
-
-			if !inWorkflow {
-				// Only check nodes while in a top-level workflow func
-				return false
-			}
-		}
-
 		switch n := node.(type) {
+		case *ast.File:
+			if push {
+				// New file, reset state
+				inWorkflow = false
+				workflowImportName = "workflow"
+			}
+			return true
+
 		case *ast.ImportSpec:
-			if n.Path.Value == `"github.com/denisaditya0/go-workflows/workflow"` {
+			if !push {
+				return false
+			}
+
+			if isWorkflowPackage(importPath(n)) {
 				if n.Name != nil {
 					workflowImportName = n.Name.Name
 				} else {
 					workflowImportName = "workflow"
 				}
 			}
+			return true
 
 		case *ast.FuncDecl:
-			// Only check functions that look like workflows
-			if !isWorkflow(workflowImportName, n) {
+			if !push {
+				// Finished with the current workflow
+				inWorkflow = false
 				return false
+			}
+
+			// Only check functions that are workflows. Non-workflow functions
+			// cannot contain workflow code, but their bodies still have to be
+			// traversed so that workflow literals defined and registered inside
+			// them (for example in `init` or `main`) are discovered.
+			if !isWorkflowDecl(pass, regs, workflowImportName, n) {
+				return true
 			}
 
 			inWorkflow = true
 
 			// Check return types
-			if n.Name.IsExported() || w.Settings.CheckPrivateReturnValues {
+			if n.Name.IsExported() || settings.CheckPrivateReturnValues {
 				if n.Type.Results == nil || len(n.Type.Results.List) == 0 {
 					pass.Reportf(n.Pos(), "workflow `%v` doesn't return anything. needs to return at least `error`", n.Name.Name)
 				} else {
@@ -136,6 +160,50 @@ func (w *GoWorkflowsPlugin) run(pass *analysis.Pass) (interface{}, error) {
 			// Continue with the function's children
 			return true
 
+		case *ast.FuncLit:
+			if !push {
+				if len(litStack) > 0 {
+					inWorkflow = litStack[len(litStack)-1]
+					litStack = litStack[:len(litStack)-1]
+				}
+				return false
+			}
+
+			litStack = append(litStack, inWorkflow)
+
+			// Package-level literals are not workflows; literals nested inside a
+			// workflow inherit its state. A registered literal, or (in heuristic
+			// mode) a literal whose first parameter is a workflow.Context, is
+			// treated as a workflow itself.
+			if isWorkflowLit(regs, workflowImportName, n) {
+				parentInWorkflow := inWorkflow
+				inWorkflow = true
+
+				// If the literal is nested inside a workflow, its variables are
+				// already covered by the enclosing function's scope walk.
+				if !parentInWorkflow {
+					funcScope := pass.TypesInfo.Scopes[n.Type]
+					if funcScope != nil {
+						checkVarsInScope(pass, funcScope)
+					}
+				}
+			}
+
+			return true
+		}
+
+		if !push {
+			// Only check nodes while descending
+			return false
+		}
+
+		if !inWorkflow {
+			// Keep traversing so workflow function literals are still discovered,
+			// but skip the workflow-specific checks for this node.
+			return true
+		}
+
+		switch n := node.(type) {
 		case *ast.RangeStmt:
 			{
 				t := pass.TypesInfo.TypeOf(n.X)
@@ -157,6 +225,14 @@ func (w *GoWorkflowsPlugin) run(pass *analysis.Pass) (interface{}, error) {
 
 		case *ast.GoStmt:
 			pass.Reportf(n.Pos(), "use `workflow.Go` instead of `go` in workflows")
+
+		case *ast.AssignStmt:
+			for _, lhs := range n.Lhs {
+				checkPackageLevelWrite(pass, lhs)
+			}
+
+		case *ast.IncDecStmt:
+			checkPackageLevelWrite(pass, n.X)
 
 		case *ast.CallExpr:
 			var pkg *ast.Ident
@@ -184,6 +260,17 @@ func (w *GoWorkflowsPlugin) run(pass *analysis.Pass) (interface{}, error) {
 					pass.Reportf(n.Pos(), "`time.Now` is not allowed in workflows, use `workflow.Now` instead")
 				case "Sleep":
 					pass.Reportf(n.Pos(), "`time.Sleep` is not allowed in workflows, use `workflow.Sleep` instead")
+				case "After", "Tick", "NewTimer", "NewTicker", "Since":
+					pass.Reportf(n.Pos(), "`time.%v` is not allowed in workflows, use `workflow.ScheduleTimer` or `workflow.Sleep` instead", id.Name)
+				}
+
+			case "math/rand", "math/rand/v2":
+				pass.Reportf(n.Pos(), "`%v.%v` is not deterministic and not allowed in workflows", pkgName.Imported().Name(), id.Name)
+
+			case "context":
+				switch id.Name {
+				case "Background", "TODO":
+					pass.Reportf(n.Pos(), "`context.%v` is not allowed in workflows, use the `workflow.Context` passed into the workflow", id.Name)
 				}
 			}
 		}
@@ -222,8 +309,11 @@ func checkNamed(pass *analysis.Pass, ref types.Object, named *types.Named) {
 		if pkg := obj.Pkg(); pkg != nil {
 			switch pkg.Path() {
 			case "sync":
-				if obj.Name() == "WaitGroup" {
+				switch obj.Name() {
+				case "WaitGroup":
 					pass.Reportf(ref.Pos(), "using `sync.WaitGroup` is not allowed in workflows, use `workflow.WaitGroup` instead")
+				case "Mutex", "RWMutex", "Once", "Cond":
+					pass.Reportf(ref.Pos(), "using `sync.%v` is not allowed in workflows", obj.Name())
 				}
 			}
 		}
@@ -231,8 +321,40 @@ func checkNamed(pass *analysis.Pass, ref types.Object, named *types.Named) {
 
 }
 
-func isWorkflow(workflowImportName string, funcDecl *ast.FuncDecl) bool {
-	params := funcDecl.Type.Params.List
+// checkPackageLevelWrite reports writes to package-level variables from within
+// a workflow. Such writes are shared across executions and replays and are not
+// deterministic.
+func checkPackageLevelWrite(pass *analysis.Pass, expr ast.Expr) {
+	var id *ast.Ident
+	switch e := expr.(type) {
+	case *ast.Ident:
+		id = e
+	case *ast.SelectorExpr:
+		id = e.Sel
+	default:
+		return
+	}
+
+	obj := pass.TypesInfo.ObjectOf(id)
+	if obj == nil {
+		return
+	}
+
+	if _, ok := obj.(*types.Var); !ok {
+		return
+	}
+
+	if obj.Pkg() != nil && obj.Parent() == obj.Pkg().Scope() {
+		pass.Reportf(expr.Pos(), "writing to package-level variable `%v` from a workflow is not deterministic", obj.Name())
+	}
+}
+
+func isWorkflow(workflowImportName string, funcType *ast.FuncType) bool {
+	if funcType.Params == nil {
+		return false
+	}
+
+	params := funcType.Params.List
 
 	// Need at least workflow.Context
 	if len(params) < 1 {
@@ -255,4 +377,40 @@ func isWorkflow(workflowImportName string, funcDecl *ast.FuncDecl) bool {
 	}
 
 	return true
+}
+
+// isWorkflowDecl reports whether the function declaration is a workflow. When
+// the package registers workflows anywhere, only registered functions count;
+// otherwise the workflow.Context parameter heuristic is used.
+func isWorkflowDecl(pass *analysis.Pass, regs registrations, workflowImportName string, n *ast.FuncDecl) bool {
+	if regs.hasAny() {
+		fn, _ := pass.TypesInfo.ObjectOf(n.Name).(*types.Func)
+		return regs.isRegisteredFunc(pass, fn)
+	}
+
+	return isWorkflow(workflowImportName, n.Type)
+}
+
+// isWorkflowLit reports whether the function literal is a workflow, following
+// the same registration-first rule as isWorkflowDecl.
+func isWorkflowLit(regs registrations, workflowImportName string, n *ast.FuncLit) bool {
+	if regs.hasAny() {
+		return regs.isRegisteredLit(n)
+	}
+
+	return isWorkflow(workflowImportName, n.Type)
+}
+
+// workflowPackageSuffix is used instead of a fully-qualified import path so that
+// the analyzer keeps working when the module is forked, vendored, or imported
+// through a different path.
+const workflowPackageSuffix = "/workflow"
+
+func isWorkflowPackage(path string) bool {
+	return path == "workflow" || strings.HasSuffix(path, workflowPackageSuffix)
+}
+
+// importPath returns the unquoted import path of an ImportSpec.
+func importPath(spec *ast.ImportSpec) string {
+	return strings.Trim(spec.Path.Value, `"`)
 }

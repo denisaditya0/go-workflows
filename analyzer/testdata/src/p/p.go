@@ -4,6 +4,7 @@ package p
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/denisaditya0/go-workflows/workflow"
@@ -104,6 +105,49 @@ func wfFunctionUsage(ctx workflow.Context) error {
 	return nil
 }
 
+func wfUsingTimers(ctx workflow.Context) error {
+	_ = time.After(time.Second)     // want "`time.After` is not allowed in workflows, use `workflow.ScheduleTimer` or `workflow.Sleep` instead"
+	_ = time.Tick(time.Second)      // want "`time.Tick` is not allowed in workflows, use `workflow.ScheduleTimer` or `workflow.Sleep` instead"
+	_ = time.NewTimer(time.Second)  // want "`time.NewTimer` is not allowed in workflows, use `workflow.ScheduleTimer` or `workflow.Sleep` instead"
+	_ = time.NewTicker(time.Second) // want "`time.NewTicker` is not allowed in workflows, use `workflow.ScheduleTimer` or `workflow.Sleep` instead"
+	_ = time.Since(time.Time{})     // want "`time.Since` is not allowed in workflows, use `workflow.ScheduleTimer` or `workflow.Sleep` instead"
+
+	return nil
+}
+
+func wfUsingRand(ctx workflow.Context) error {
+	_ = rand.Intn(10) // want "`rand.Intn` is not deterministic and not allowed in workflows"
+
+	return nil
+}
+
+var globalCounter int
+
+func wfUsingStdContext(ctx workflow.Context) error {
+	_ = context.Background() // want "`context.Background` is not allowed in workflows, use the `workflow.Context` passed into the workflow"
+	_ = context.TODO()       // want "`context.TODO` is not allowed in workflows, use the `workflow.Context` passed into the workflow"
+
+	return nil
+}
+
+func wfUsingSyncPrimitives(ctx workflow.Context) error {
+	var mu sync.Mutex // want "using `sync.Mutex` is not allowed in workflows"
+	mu.Lock()
+	mu.Unlock()
+
+	var once sync.Once // want "using `sync.Once` is not allowed in workflows"
+	once.Do(func() {})
+
+	return nil
+}
+
+func wfWritingPackageLevelVar(ctx workflow.Context) error {
+	globalCounter = 1 // want "writing to package-level variable `globalCounter` from a workflow is not deterministic"
+	globalCounter++   // want "writing to package-level variable `globalCounter` from a workflow is not deterministic"
+
+	return nil
+}
+
 func activity(ctx context.Context) error {
 	go fmt.Println("test")
 
@@ -131,4 +175,42 @@ var sf SomeField = SomeField{
 
 		return nil
 	},
+}
+
+// Package-level function literals are not workflows and must not be reported.
+var packageLevelFunc = func() {
+	time.Sleep(time.Second)
+	go fmt.Println("not a workflow")
+}
+
+// A function literal whose first parameter is a workflow.Context is a workflow
+// and its body must be checked.
+var workflowLiteral = func(ctx workflow.Context) error {
+	time.Sleep(time.Second) // want "`time.Sleep` is not allowed in workflows, use `workflow.Sleep` instead"
+	select {}               // want "`select` statements are not allowed in workflows, use `workflow.Select` instead"
+
+	return nil
+}
+
+// Variables inside nested literals must be reported exactly once, even though
+// both the enclosing workflow literal and the nested literal are visited.
+var workflowLiteralWithNested = func(ctx workflow.Context) error {
+	f := func() {
+		c := make(chan int) // want "using native channels is not allowed in workflows, use `workflow.Channel` instead"
+		_ = c
+	}
+	f()
+
+	return nil
+}
+
+// A workflow literal assigned with `:=` inside a non-workflow package-level
+// literal must still be discovered (the assignment node must not prune it).
+var outerNonWorkflowLiteral = func() {
+	wf := func(ctx workflow.Context) error {
+		time.Sleep(time.Second) // want "`time.Sleep` is not allowed in workflows, use `workflow.Sleep` instead"
+
+		return nil
+	}
+	_ = wf
 }

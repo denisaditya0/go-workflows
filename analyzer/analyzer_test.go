@@ -20,7 +20,7 @@ func TestAll(t *testing.T) {
 	analyzers, err := plugin.BuildAnalyzers()
 	require.NoError(t, err)
 
-	analysistest.Run(t, analysistest.TestData(), analyzers[0], "p", "q")
+	analysistest.Run(t, analysistest.TestData(), analyzers[0], "p", "q", "r")
 }
 
 func TestComplex(t *testing.T) {

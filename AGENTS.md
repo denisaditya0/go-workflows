@@ -63,8 +63,8 @@ golangci-lint run --timeout=5m
 
 **Note:** The project uses golangci-lint v2.4.0 configuration. Version v1.x will not work with the `.golangci.yml` configuration file.
 
-#### Workaround: Basic Linting (When Custom Analyzer Has Issues)
-If the custom analyzer has version compatibility issues:
+#### Workaround: Basic Linting (If golangci-lint Cannot Build the Plugin)
+If the custom analyzer plugin cannot be built in your environment:
 
 ```bash
 # Run basic linting without custom analyzer - Takes ~12 seconds.
@@ -77,7 +77,7 @@ The `.golangci.yml` configuration enables multiple linters including:
 - **Bug Detection**: govet, makezero, prealloc, predeclared
 - **Style & Formatting**: gofmt, whitespace, tagalign
 - **Testing**: testifylint, tparallel
-- **Custom**: goworkflows (workflow-specific validation, currently commented out)
+- **Custom**: goworkflows (workflow-specific validation; enabled and built via `make custom-gcl`)
 
 ### Sample Applications
 ```bash
@@ -217,12 +217,10 @@ docker compose down
 ## Known Issues and Limitations
 
 ### Current Issues
-- Custom analyzer plugin has version conflicts with current golangci-lint
 - One test failure in `tester/tester_timers_test.go` (non-critical)
 - Various linter warnings present but not blocking
 
 ### Workarounds
-- Use basic linting configuration instead of full analyzer
 - Skip non-critical test failures in validation
 - Focus on core functionality tests for validation
 
