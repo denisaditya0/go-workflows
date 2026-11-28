@@ -56,7 +56,13 @@ var e2eRemovalTests = []backendTest{
 
 			register(t, ctx, w, []interface{}{wf}, nil)
 
-			err := c.StartAutoExpiration(ctx, time.Millisecond)
+			// Run the workflow to completion before starting auto-expiration, so
+			// reading the result below cannot race with the instance being removed.
+			workflowA := runWorkflow(t, ctx, c, wf)
+			_, err := client.GetWorkflowResult[bool](ctx, c, workflowA, time.Second*10)
+			require.NoError(t, err)
+
+			err = c.StartAutoExpiration(ctx, time.Millisecond)
 			if errors.As(err, &backend.ErrNotSupported{}) {
 				t.Skip()
 				return
@@ -64,21 +70,13 @@ var e2eRemovalTests = []backendTest{
 
 			require.NoError(t, err)
 
-			workflowA := runWorkflow(t, ctx, c, wf)
-			_, err = client.GetWorkflowResult[bool](ctx, c, workflowA, time.Second*10)
-			require.NoError(t, err)
-
-			for i := 0; i < 10; i++ {
-				time.Sleep(100 * time.Millisecond)
-				_, err = c.GetWorkflowInstanceState(ctx, workflowA)
-				if err != backend.ErrInstanceNotFound {
-					continue
-				} else {
-					break
-				}
-			}
-
-			require.ErrorIs(t, err, backend.ErrInstanceNotFound)
+			// The removal cutoff is `now - delay`, which is at or after the moment
+			// auto-expiration was started — always after the already-finished
+			// instance — so this deterministically expires it regardless of delay.
+			require.Eventually(t, func() bool {
+				_, err := c.GetWorkflowInstanceState(ctx, workflowA)
+				return errors.Is(err, backend.ErrInstanceNotFound)
+			}, 10*time.Second, 50*time.Millisecond)
 		},
 	},
 	{
@@ -110,17 +108,10 @@ var e2eRemovalTests = []backendTest{
 			err = c.StartAutoExpiration(ctx, time.Millisecond)
 			require.NoError(t, err)
 
-			for i := 0; i < 10; i++ {
-				time.Sleep(100 * time.Millisecond)
-				_, err = c.GetWorkflowInstanceState(ctx, workflowA)
-				if err != backend.ErrInstanceNotFound {
-					continue
-				} else {
-					break
-				}
-			}
-
-			require.ErrorIs(t, err, backend.ErrInstanceNotFound)
+			require.Eventually(t, func() bool {
+				_, err := c.GetWorkflowInstanceState(ctx, workflowA)
+				return errors.Is(err, backend.ErrInstanceNotFound)
+			}, 10*time.Second, 50*time.Millisecond)
 		},
 	},
 }
